@@ -27,7 +27,10 @@ body {
      to 46px each to fit larger, easier-to-read figures. Narrowed back to
      420px after the pit-window list column was removed and its "run out"
      figures were folded into a 5th per-row column here instead, then to
-     400px once run-out was trimmed from a 3-lap to a 2-lap projection. */
+     400px once run-out was trimmed from a 3-lap to a 2-lap projection.
+     (Briefly went to 412px for a 3-decimal-precision Finish column, e.g.
+     "-38.931" -- reverted back to 400px along with Finish's 2-decimal
+     precision, e.g. "-38.93".) */
   width: 400px;
 }
 
@@ -149,8 +152,9 @@ body {
    "Finish"/"Run out"/"Final pit" figures line up under their headers
    regardless of how wide the value column's own content is -- 1fr for the
    value, then fixed columns for the figures (Finish gets a touch more room
-   for its pill background, Run out more still since it holds a "12-24"-
-   style lap pair, Final pit is narrow since it's just a centered dot). */
+   for its sign plus pill padding, e.g. "-38.93"; Run out is wide since it
+   holds a "12-24"-style lap pair; Final pit is narrow since it's just a
+   centered dot). */
 .stat-row,
 .rate-header {
   display: grid;

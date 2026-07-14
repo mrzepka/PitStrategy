@@ -127,6 +127,12 @@ class StrategyEngine:
         # two different sessions into one rolling average.
         prev_session_type = self._session_tracker.check(state.session_num, state.session_type)
         if prev_session_type is not None:
+            print(
+                f"[PitStrategy] session transition: session_num={state.session_num} "
+                f"prev_session_type={prev_session_type!r} new_session_type={state.session_type!r} "
+                f"last_lap={self._last_lap!r}",
+                file=sys.stderr,
+            )
             if is_qualifying_session(prev_session_type):
                 fuel_snapshot = self._fuel.snapshot()
                 lap_time_avg = (
@@ -134,16 +140,52 @@ class StrategyEngine:
                     if self._lap_time_samples
                     else None
                 )
-                if fuel_snapshot.avg_fuel_per_lap and lap_time_avg:
+                print(
+                    f"[PitStrategy] qualifying ({prev_session_type!r}) ended -- fuel snapshot: "
+                    f"avg_fuel_per_lap={fuel_snapshot.avg_fuel_per_lap!r} "
+                    f"max_fuel_per_lap={fuel_snapshot.max_fuel_per_lap!r} "
+                    f"last_lap_fuel_per_lap={fuel_snapshot.last_lap_fuel_per_lap!r} "
+                    f"samples={fuel_snapshot.samples} "
+                    f"current_fuel_level={fuel_snapshot.current_fuel_level!r} "
+                    f"tank_capacity={fuel_snapshot.tank_capacity!r} | "
+                    f"lap_time_avg={lap_time_avg!r} "
+                    f"lap_time_samples={self._lap_time_samples!r}",
+                    file=sys.stderr,
+                )
+                if fuel_snapshot.max_fuel_per_lap and lap_time_avg:
+                    if self._qualifying_baseline is not None:
+                        print(
+                            f"[PitStrategy] qualifying baseline REPLACED: "
+                            f"old fuel_per_lap={self._qualifying_baseline.fuel_per_lap!r} "
+                            f"(from {self._qualifying_baseline.session_type!r}) -> "
+                            f"new fuel_per_lap={fuel_snapshot.max_fuel_per_lap!r}",
+                            file=sys.stderr,
+                        )
                     with self._lock:
                         self._qualifying_baseline = SessionBaseline(
-                            fuel_per_lap=fuel_snapshot.avg_fuel_per_lap,
+                            # The worst-case (max) single-lap usage seen during
+                            # qualifying, not the rolling average -- a fuel plan
+                            # built on an average would come up short on exactly
+                            # the lap(s) that used more than average.
+                            fuel_per_lap=fuel_snapshot.max_fuel_per_lap,
                             lap_time_s=lap_time_avg,
                             fuel_samples=fuel_snapshot.samples,
                             lap_time_samples=len(self._lap_time_samples),
                             session_type=prev_session_type,
                             captured_at_lap=self._last_lap or 0,
                         )
+                    print(
+                        f"[PitStrategy] qualifying baseline captured: {self._qualifying_baseline!r}",
+                        file=sys.stderr,
+                    )
+                else:
+                    print(
+                        f"[PitStrategy] qualifying baseline NOT captured -- need both "
+                        f"max_fuel_per_lap and lap_time_avg to be truthy "
+                        f"(max_fuel_per_lap={fuel_snapshot.max_fuel_per_lap!r}, "
+                        f"lap_time_avg={lap_time_avg!r})",
+                        file=sys.stderr,
+                    )
             self._fuel.reset()
             self._tires.reset()
             self._relative.reset()

@@ -2,9 +2,7 @@
 
 A local live fuel/tire monitor for iRacing, shown as a small browser overlay
 rather than a native in-game overlay. Focused entirely on reacting to your
-current pace lap-to-lap (fuel rates, laps-remaining projections, tire wear) —
-there's no pre-race stint planner wired into the running app right now (see
-[No more pre-race planner](#no-more-pre-race-planner) below).
+current pace lap-to-lap (fuel rates, laps-remaining projections, tire wear).
 
 ## TL;DR
 
@@ -194,10 +192,9 @@ close button. Move it by clicking and dragging anywhere on the HUD itself
 (pywebview's `easy_drag`), and close it with **Alt+F4** or via the taskbar.
 It's also always-on-top and starts at 440×420, then **resizes itself to fit
 its actual content** (`overlay.js`'s `fitWindowToContent()`, called after
-every update) since the HUD's real height varies a lot depending on what's
-showing (an active plan's pit-window list, the relative panel, etc.) — a
-single fixed size would always be too big for some states and too small for
-others. This goes through pywebview's own resize mechanism (a small
+every update) since the HUD's real height varies depending on what's
+showing (the relative panel, the Quali fuel row, etc.) — a single fixed
+size would always be too big for some states and too small for others. This goes through pywebview's own resize mechanism (a small
 `js_api` bridge: the page calls `window.pywebview.api.resize(w, h)`, which
 `server/webview_launcher.py`'s `_Api.resize()` forwards to
 `Window.resize()`) rather than the page-level `window.resizeTo()` used
@@ -287,12 +284,14 @@ The live fuel/lap-time trackers already used by the overlay are watched for
 a session change (`core/session_baseline.py`'s `SessionTransitionTracker`,
 driven by iRacing's own `SessionNum`), and the moment a qualifying-type
 session (`SessionType` containing "Qualify" — covers "Lone Qualify" and
-"Open Qualify") ends, whatever rolling averages it had accumulated are
-snapshotted as a baseline. That baseline is pushed straight into the
-websocket snapshot as `qualifying_baseline` and drives the overlay's
-**Quali fuel** row directly — no manual step, no separate page. `GET
-/api/qualifying-baseline` also exists standalone if something else ever
-wants to read it (e.g. a future planner).
+"Open Qualify") ends, its fuel/lap-time data is snapshotted as a baseline.
+The fuel side is deliberately the **worst-case (max) single-lap usage**
+seen during that session, not a rolling average — a fuel plan built on an
+average would come up short on exactly the lap(s) that used more than
+that. That baseline is pushed straight into the websocket snapshot as
+`qualifying_baseline` and drives the overlay's **Quali fuel** row directly
+— no manual step, no separate page. `GET /api/qualifying-baseline` also
+exists standalone if something else ever wants to read it.
 
 This is in-memory only for the current server run, not written to disk —
 restarting the server between qualifying and the race loses it, same as any
@@ -355,8 +354,7 @@ full tank's worth of laps later (same math as "Stint") — so a
 higher-consumption rate shows earlier, closer-together numbers than a
 lower-consumption one. This is a forward projection from the current lap,
 computed client-side in `overlay.js`'s `runoutLapsText()`/`applyRunout()`
-from data the websocket already sends every tick — no backend changes
-needed, and no dependency on a plan.
+from data the websocket already sends every tick.
 
 Originally a separate stacked list next to the pit-window list, and a
 3-lap projection; folded into this per-row column (aligned directly with
@@ -373,11 +371,7 @@ same basis the fuel gauge's own number uses) would already get you; the
 next two cells are one lap further each, showing the progressively
 stricter L/lap you'd need to average from here to stretch the stint that
 extra lap or two. All three use `current_fuel_level ÷ target_laps`,
-computed client-side in `overlay.js`'s `renderFuelTargets()`.
-
-This was briefly removed (2026-07-14) along with the pre-race planner,
-then added back the same day once it turned out to still be used —
-unlike the planner, it has no dependency on an active plan; it's driven
+computed client-side in `overlay.js`'s `renderFuelTargets()`, driven
 entirely by the live fuel gauge's own numbers.
 
 ## Final-window indicator
@@ -499,35 +493,7 @@ consumed by the frontend at all.
 Tank capacity for the live overlay is read automatically from iRacing's
 session info (`DriverCarFuelMaxLtr`).
 
-## No more pre-race planner
-
-There used to be a `/planner` page: given race length, tank capacity,
-expected fuel/lap, tire life, and mandatory stops, it produced a full stint
-plan (laps per stint, pit-in lap, fuel to add at each stop), which you could
-then "activate" so the live overlay would tint the Last-lap box
-over/under-target and a global **Ctrl+Alt+F** hotkey would send that
-stint's `fuel_to_add` to iRacing's pit stall via the SDK pit-service
-broadcast (`irsdk_BroadcastPitCommand` / `PitCommand_Fuel`).
-
-All of that has been removed from the running app: `/planner`, `/api/plan`,
-`/api/plan/activate`, `/api/plan/deactivate`, `server/hotkey.py`
-(`FuelHotkeyListener`), `send_pit_fuel()` on both telemetry sources, and the
-overlay's plan-dependent UI (the Last-lap ok/warn tint, the fuel-command
-status line). The `keyboard` dependency it needed is gone from
-`requirements.txt` too. The overlay is now purely a live lap-to-lap
-fuel/tire monitor with nothing that depends on a pre-race plan. (The
-[fuel-target row](#fuel-targets) was removed in the same pass, then added
-back the same day since it turned out to still be used — it never actually
-depended on the planner.)
-
-The planner's actual math — `core/pit_planner.py`'s `plan_race()`,
-`RacePlan`, `Stint`, `current_stint_fuel_to_add()`, `upcoming_pit_windows()`
-— was deliberately **left in place and untouched**, along with its full
-test coverage in `tests/test_pit_planner.py`, even though nothing in
-`server/` imports it anymore. It's dormant, not deleted: this project has
-no git history to recover deleted code from, and a pre-race planner may
-come back later as its own app/page/script rather than being rebuilt from
-scratch — reusing this module (or not) is a call for whenever that happens.
+## Known caveats
 
 The relative panel's SDK field names (`CarIdxPosition`, `CarIdxLastLapTime`,
 `CarIdxOnPitRoad`, `PlayerCarIdx`) are standard iRacing telemetry channels
@@ -549,8 +515,8 @@ that's checked.
 python -m pytest tests/
 ```
 
-Covers the fuel/tire rolling-average math and the (currently dormant)
-pit-planner/what-if calculations directly — no iRacing connection needed.
+Covers the fuel/tire rolling-average math and the live pit-window
+calculations directly — no iRacing connection needed.
 
 ## Project layout
 
@@ -558,7 +524,7 @@ pit-planner/what-if calculations directly — no iRacing connection needed.
 - `core/relative.py` — nearest-3-ahead/behind ranking + pit-status tracking for the relative panel
 - `core/session_baseline.py` — detects a qualifying-type session ending, feeds the overlay's Quali fuel row
 - `core/leader_pace.py` — rolling average of the race leader's lap times, for the leader-pace fuel-to-finish margin
-- `core/pit_planner.py` — live pit-window logic (`compute_live_strategy()`, still wired in) + a dormant pre-race `plan_race()` (see [No more pre-race planner](#no-more-pre-race-planner))
+- `core/pit_planner.py` — live pit-window logic (`compute_live_strategy()`)
 - `core/irsdk_client.py` — pyirsdk live telemetry source + synthetic demo source
 - `server/engine.py` — ties a telemetry source to the trackers, produces one
   JSON snapshot per tick

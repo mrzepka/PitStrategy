@@ -250,7 +250,7 @@ function fmt(value, digits = 1, suffix = "") {
 function fmtLapTime(seconds) {
   if (seconds === null || seconds === undefined) return "–";
   const m = Math.floor(seconds / 60);
-  const s = (seconds % 60).toFixed(1).padStart(4, "0");
+  const s = (seconds % 60).toFixed(2).padStart(5, "0");
   return `${m}:${s}`;
 }
 
@@ -261,7 +261,7 @@ function fmtLapTime(seconds) {
 // supplies the unit, so it doesn't need to be repeated on every row.
 function lapsLeftText(ratePerLap, currentFuelLevel) {
   if (!ratePerLap || ratePerLap <= 0 || currentFuelLevel === null || currentFuelLevel === undefined) return "–";
-  return (currentFuelLevel / ratePerLap).toFixed(1);
+  return (currentFuelLevel / ratePerLap).toFixed(2);
 }
 
 // "If I ran a whole fresh stint at this rate, how many laps would a full
@@ -270,7 +270,7 @@ function lapsLeftText(ratePerLap, currentFuelLevel) {
 // lap the way the "Now" column does.
 function stintLengthText(ratePerLap, tankCapacity) {
   if (!ratePerLap || ratePerLap <= 0 || !tankCapacity || tankCapacity <= 0) return "–";
-  return (tankCapacity / ratePerLap).toFixed(1);
+  return (tankCapacity / ratePerLap).toFixed(2);
 }
 
 // "If I ran the rest of the race at this rate, would what's in the tank be
@@ -287,7 +287,7 @@ function applyFinishMargin(el, ratePerLap, currentFuelLevel, lapsRemainingLeader
   }
   const margin = currentFuelLevel - lapsRemainingLeaderPace * ratePerLap;
   const sign = margin >= 0 ? "+" : "";
-  el.textContent = `${sign}${margin.toFixed(1)}`;
+  el.textContent = `${sign}${margin.toFixed(2)}`;
   el.classList.add(margin >= 0 ? "finish-ok" : "finish-critical");
 }
 
@@ -315,7 +315,7 @@ function applyFinalWindow(el, ratePerLap, tankCapacity, lapsRemainingLeaderPace)
 function fmtDelta(delta) {
   if (delta === null || delta === undefined) return "–";
   const sign = delta >= 0 ? "+" : "";
-  return `${sign}${delta.toFixed(1)}`;
+  return `${sign}${delta.toFixed(2)}`;
 }
 
 function renderRelativeGroup(container, cars) {
@@ -390,7 +390,7 @@ function renderFuelTargets(fuel) {
     cell.className = "fuel-target-cell";
     cell.innerHTML = `
       <div class="fuel-target-lap">${targetLaps} laps</div>
-      <div class="fuel-target-rate">${targetRate.toFixed(2)} L/lap</div>
+      <div class="fuel-target-rate">${targetRate.toFixed(3)} L/lap</div>
     `;
     fuelTargetRow.appendChild(cell);
   }
@@ -420,7 +420,7 @@ function renderFuelGauge(fuel) {
       var(--safe-fuel) ${yellowPct}%, var(--safe-fuel) 100%)`;
 
     const lapsLeft = fuel.laps_remaining_on_fuel;
-    fuelGaugeLabel.textContent = lapsLeft !== null && lapsLeft !== undefined ? Math.floor(lapsLeft) : "";
+    fuelGaugeLabel.textContent = lapsLeft !== null && lapsLeft !== undefined ? lapsLeft.toFixed(1) : "";
     fuelGaugeLabel.style.top = `${usedPct}%`;
   } else {
     fuelGaugeZones.style.background = "var(--safe-fuel)";
@@ -481,20 +481,20 @@ function render(data) {
   const tankCapacity = fuel.tank_capacity;
   const currentLap = data.lap;
   const lapsRemainingLeaderPace = data.laps_remaining_leader_pace;
-  fuelPerLap.textContent = fmt(fuel.avg_fuel_per_lap, 2, " L/lap");
+  fuelPerLap.textContent = fmt(fuel.avg_fuel_per_lap, 3, " L/lap");
   fuelPerLapLaps.textContent = lapsLeftText(fuel.avg_fuel_per_lap, currentFuelLevel);
   fuelPerLapStint.textContent = stintLengthText(fuel.avg_fuel_per_lap, tankCapacity);
   applyFinishMargin(fuelPerLapFinish, fuel.avg_fuel_per_lap, currentFuelLevel, lapsRemainingLeaderPace);
   applyRunout(fuelPerLapRunout, fuel.avg_fuel_per_lap, currentLap, currentFuelLevel, tankCapacity);
   applyFinalWindow(fuelPerLapFinalWindow, fuel.avg_fuel_per_lap, tankCapacity, lapsRemainingLeaderPace);
-  fuelMax.textContent = fmt(fuel.max_fuel_per_lap, 2, " L/lap");
+  fuelMax.textContent = fmt(fuel.max_fuel_per_lap, 3, " L/lap");
   fuelMaxLaps.textContent = lapsLeftText(fuel.max_fuel_per_lap, currentFuelLevel);
   fuelMaxStint.textContent = stintLengthText(fuel.max_fuel_per_lap, tankCapacity);
   applyFinishMargin(fuelMaxFinish, fuel.max_fuel_per_lap, currentFuelLevel, lapsRemainingLeaderPace);
   applyRunout(fuelMaxRunout, fuel.max_fuel_per_lap, currentLap, currentFuelLevel, tankCapacity);
   applyFinalWindow(fuelMaxFinalWindow, fuel.max_fuel_per_lap, tankCapacity, lapsRemainingLeaderPace);
   fuelCap.textContent = fuel.tank_capacity !== null && fuel.tank_capacity !== undefined
-    ? fmt(fuel.tank_capacity, 1, " L") + (fuel.fuel_pct_available && fuel.fuel_pct_available !== 100 ? ` (×${fuel.fuel_pct_available}%)` : "")
+    ? fmt(fuel.tank_capacity, 2, " L") + (fuel.fuel_pct_available && fuel.fuel_pct_available !== 100 ? ` (×${fuel.fuel_pct_available.toFixed(1)}%)` : "")
     : "–";
   renderFuelGauge(fuel);
   renderFuelTargets(fuel);
@@ -503,7 +503,7 @@ function render(data) {
   const showQuali = qualiBaseline && (data.settings || {}).show_quali_fuel !== false;
   qualiFuelBox.style.display = showQuali ? "" : "none";
   if (qualiBaseline) {
-    qualiFuel.textContent = fmt(qualiBaseline.fuel_per_lap, 2, " L/lap");
+    qualiFuel.textContent = fmt(qualiBaseline.fuel_per_lap, 3, " L/lap");
     qualiFuelLaps.textContent = lapsLeftText(qualiBaseline.fuel_per_lap, currentFuelLevel);
     qualiFuelStint.textContent = stintLengthText(qualiBaseline.fuel_per_lap, tankCapacity);
     applyFinishMargin(qualiFuelFinish, qualiBaseline.fuel_per_lap, currentFuelLevel, lapsRemainingLeaderPace);
@@ -511,7 +511,7 @@ function render(data) {
     applyFinalWindow(qualiFuelFinalWindow, qualiBaseline.fuel_per_lap, tankCapacity, lapsRemainingLeaderPace);
   }
 
-  lastLapFuel.textContent = fmt(fuel.last_lap_fuel_per_lap, 2, " L/lap");
+  lastLapFuel.textContent = fmt(fuel.last_lap_fuel_per_lap, 3, " L/lap");
   lastLapFuelLaps.textContent = lapsLeftText(fuel.last_lap_fuel_per_lap, currentFuelLevel);
   lastLapFuelStint.textContent = stintLengthText(fuel.last_lap_fuel_per_lap, tankCapacity);
   applyFinishMargin(lastLapFuelFinish, fuel.last_lap_fuel_per_lap, currentFuelLevel, lapsRemainingLeaderPace);
@@ -520,9 +520,9 @@ function render(data) {
 
   const tires = data.tires || {};
   tireWorst.textContent = tires.worst_wear_remaining !== null && tires.worst_wear_remaining !== undefined
-    ? `${tires.worst_tire_position ?? "?"} ${fmt(tires.worst_wear_remaining * 100, 0, "%")}`
+    ? `${tires.worst_tire_position ?? "?"} ${fmt(tires.worst_wear_remaining * 100, 1, "%")}`
     : "–";
-  tireTemp.textContent = fmt(tires.worst_tire_temp, 0, "°");
+  tireTemp.textContent = fmt(tires.worst_tire_temp, 1, "°");
 
   const relative = data.relative || { ahead: [], behind: [] };
   renderRelativeGroup(relativeAhead, relative.ahead);

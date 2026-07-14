@@ -1,6 +1,6 @@
 """Detects when a qualifying-type session ends, so `StrategyEngine` can
-snapshot the live fuel/lap-time rolling averages as a baseline for the
-pre-race planner -- instead of the driver having to guess numbers by hand.
+snapshot that session's fuel/lap-time data as a baseline for the overlay's
+Quali fuel row -- instead of the driver having to guess numbers by hand.
 
 iRacing reports session type as a free-text string per session slot
 ("Practice", "Open Qualify", "Lone Qualify", "Race", "Warmup", "Offline
@@ -20,6 +20,9 @@ def is_qualifying_session(session_type: str | None) -> bool:
 
 @dataclass
 class SessionBaseline:
+    # The worst-case (max) single-lap fuel usage seen during the qualifying
+    # session, not a rolling average -- a fuel plan built on an average
+    # would come up short on exactly the lap(s) that used more than that.
     fuel_per_lap: float
     lap_time_s: float
     fuel_samples: int

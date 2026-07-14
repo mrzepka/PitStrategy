@@ -5,6 +5,7 @@ It only records a per-lap usage sample when the lap number advances, and
 discards any sample where fuel went *up* (a refuel happened) instead of
 letting it corrupt the rolling average.
 """
+import sys
 import threading
 from collections import deque
 from dataclasses import dataclass
@@ -95,6 +96,13 @@ class FuelTracker:
         if self._last_lap is None:
             self._last_lap = lap
             self._fuel_at_lap_start = fuel_level
+            print(
+                f"[PitStrategy] fuel: tracking (re)started at lap={lap} "
+                f"fuel_level={fuel_level:.3f}L -- if this lap wasn't actually just starting "
+                f"(e.g. mid-lap, or an out-lap that doesn't increment `lap`), the very next "
+                f"sample's usage will be inflated by whatever was burned before this point",
+                file=sys.stderr,
+            )
             return
 
         if lap == self._last_lap:
@@ -112,6 +120,20 @@ class FuelTracker:
                 self._usage.append(per_lap)
                 if self._max_fuel_per_lap is None or per_lap > self._max_fuel_per_lap:
                     self._max_fuel_per_lap = per_lap
+                print(
+                    f"[PitStrategy] fuel: lap {self._last_lap}->{lap} "
+                    f"usage={per_lap:.3f} L/lap (fuel {self._fuel_at_lap_start:.3f}L -> "
+                    f"{fuel_level:.3f}L over {laps_advanced} lap(s)) -- accepted, "
+                    f"rolling avg now {self.avg_fuel_per_lap}",
+                    file=sys.stderr,
+                )
+            else:
+                print(
+                    f"[PitStrategy] fuel: lap {self._last_lap}->{lap} "
+                    f"fuel {self._fuel_at_lap_start:.3f}L -> {fuel_level:.3f}L "
+                    f"(delta={delta:.3f}L, went up or flat) -- discarded as a refuel/outlier",
+                    file=sys.stderr,
+                )
 
         self._last_lap = lap
         self._fuel_at_lap_start = fuel_level
