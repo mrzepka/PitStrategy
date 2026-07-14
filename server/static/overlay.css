@@ -124,12 +124,17 @@ body {
   height: 7px;
   margin-left: 3px;
   border-radius: 50%;
-  background: transparent;
+  /* Dim by default so the indicator itself is always visible (a fully
+     transparent "off" state was indistinguishable from the feature not
+     being there at all) -- lights up solid green in .open below. */
+  background: var(--muted);
+  opacity: 0.35;
   vertical-align: middle;
 }
 
 .final-window-dot.open {
   background: var(--good);
+  opacity: 1;
 }
 
 .stat-value {

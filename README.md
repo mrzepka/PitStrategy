@@ -382,12 +382,16 @@ entirely by the live fuel gauge's own numbers.
 ## Final-window indicator
 
 A small dot next to each fuel-rate row's label (Last lap, Max fuel, 5-lap
-avg, Quali fuel) lights up green when **pitting right now and filling to a
-full tank would be enough fuel to finish the race at that row's rate** —
-i.e. this could be your last stop. Answers a different question than the
-Finish column: Finish asks "would my *current* fuel get me to the end
-without stopping again," this asks "if I *do* stop once more, is a full
-tank enough to make it the final one."
+avg, Quali fuel) is dim gray normally and lights up **solid green** when
+**pitting right now and filling to a full tank would be enough fuel to
+finish the race at that row's rate** — i.e. this could be your last stop.
+(It's always visibly there, just dim, rather than fully invisible when
+off — an earlier version used a fully transparent "off" state, which made
+it impossible to tell the indicator existed at all until the moment it
+happened to light up.) Answers a different question than the Finish
+column: Finish asks "would my *current* fuel get me to the end without
+stopping again," this asks "if I *do* stop once more, is a full tank
+enough to make it the final one."
 
 Math (`overlay.js`'s `isFinalWindowOpen()`): `tank_capacity >=
 laps_remaining_leader_pace × rate`. Deliberately does **not** factor in
