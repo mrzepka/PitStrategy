@@ -1,0 +1,71 @@
+:root {
+  --surface-1: #1a1a19;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --muted: #898781;
+  --border: rgba(255, 255, 255, 0.1);
+  --accent: #2a78d6;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  padding: 16px 20px 20px;
+}
+
+h1 {
+  font-size: 16px;
+  margin: 0 0 2px;
+}
+
+.hint {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 0 0 16px;
+}
+
+section {
+  margin-bottom: 16px;
+}
+
+h2 {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 6px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+}
+
+label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding: 4px 0;
+  cursor: pointer;
+}
+
+input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+#save-status {
+  font-size: 11px;
+  color: var(--muted);
+  min-height: 14px;
+  margin-top: 4px;
+}

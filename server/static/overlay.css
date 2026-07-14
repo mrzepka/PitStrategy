@@ -1,0 +1,289 @@
+:root {
+  --surface-1: #1a1a19;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --muted: #898781;
+  --border: rgba(255, 255, 255, 0.1);
+  --good: #0ca30c;
+  --warning: #fab219;
+  --critical: #d03b3b;
+  --safe-fuel: #2a78d6; /* distinct from --good so the gauge's "plenty left" zone
+                            doesn't read as the same signal as the status-bar green */
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--text-primary);
+  /* Widened from 340px -> 380px -> 420px as the Now/Stint/Finish columns
+     were added, then to 460px so those same columns could grow from 34px
+     to 46px each to fit larger, easier-to-read figures. Narrowed back to
+     420px after the pit-window list column was removed and its "run out"
+     figures were folded into a 5th per-row column here instead, then to
+     400px once run-out was trimmed from a 3-lap to a 2-lap projection. */
+  width: 400px;
+}
+
+#hud {
+  /* Solid on purpose -- the actual see-through-to-the-desktop effect is now
+     applied at the window level (server/webview_launcher.py's WINDOW_ALPHA,
+     via a real Win32 layered window), uniformly across the whole overlay.
+     A CSS alpha here would stack with that and make text harder to read;
+     tune transparency in WINDOW_ALPHA, tune legibility here if needed. */
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.col-label {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+.main-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+/* ---- Fuel comparison boxes (now the leftmost content -- the pit-window
+   list that used to live to the left of this was removed, and its "run
+   out" figures were folded into a per-row column here instead of a
+   separate stacked list) ---- */
+
+#fuel-info-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.info-box {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  padding: 5px 8px;
+}
+
+.stat-label {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+}
+
+.stat-value {
+  font-size: 18px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-value.small { font-size: 13px; color: var(--text-secondary); }
+
+/* Shared by .rate-header and .stat-row so the "Now"/"Stint"/"Finish"/"Run
+   out" numbers line up under their headers regardless of how wide the value
+   column's own content is -- 1fr for the value, then fixed columns for the
+   figures (Finish gets a touch more room for its pill background, Run out
+   a bit more still since it holds a "12-24"-style lap pair). */
+.stat-row,
+.rate-header {
+  display: grid;
+  grid-template-columns: 1fr 46px 46px 52px 54px;
+  column-gap: 4px;
+  align-items: baseline;
+}
+
+.rate-header {
+  font-size: 9px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0 8px;
+}
+
+.rate-header span:not(:first-child) { text-align: right; }
+
+.stat-laps-left {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-align: right;
+}
+
+/* Solid rounded-rect pill for the "Finish" column -- black text on a filled
+   green/red background so the surplus/deficit reads at a glance. */
+.stat-laps-left.finish-ok,
+.stat-laps-left.finish-critical {
+  color: #0b0b0b;
+  font-weight: 700;
+  border-radius: 6px;
+  padding: 1px 5px;
+}
+.stat-laps-left.finish-ok { background: var(--good); }
+.stat-laps-left.finish-critical { background: var(--critical); }
+
+/* ---- Right: fuel gauge ---- */
+
+#fuel-gauge-col {
+  flex: none;
+  width: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+#fuel-gauge {
+  position: relative;
+  width: 30px;
+  height: 158px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--muted);
+}
+
+#fuel-gauge-zones {
+  position: absolute;
+  inset: 0;
+}
+
+#fuel-gauge-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+#fuel-gauge-label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  transform: translateY(-50%);
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: #0b0b0b;
+  text-shadow: 0 0 3px rgba(255, 255, 255, 0.9), 0 0 2px rgba(255, 255, 255, 0.9);
+  pointer-events: none;
+}
+
+.gauge-caption {
+  margin-top: 4px;
+  font-size: 9px;
+  color: var(--muted);
+  text-align: center;
+}
+
+#fuel-target-row {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 6px;
+}
+
+.fuel-target-cell {
+  flex: 1;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  padding: 5px 4px;
+}
+
+/* The nearest/current-pace target (leftmost cell) stands out from the two
+   stretch targets to its right. */
+.fuel-target-cell:first-child {
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid var(--border);
+}
+
+.fuel-target-lap {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.fuel-target-rate {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  margin-top: 1px;
+}
+
+/* ---- Kept from before: tire tiles, relative panel, footer ---- */
+
+.stat-grid {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.stat-tile {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+#relative-panel {
+  margin-top: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+}
+
+.relative-group + .relative-group { margin-top: 4px; }
+
+.relative-label {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+}
+
+.relative-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  padding: 1px 0;
+}
+
+.rel-gap { color: var(--muted); width: 2.2em; }
+.rel-car { color: var(--text-primary); width: 3em; font-weight: 600; }
+.rel-laptime { color: var(--text-secondary); width: 4.5em; }
+.rel-delta { width: 4em; text-align: right; color: var(--muted); }
+.rel-delta.ok { color: var(--good); }
+.rel-delta.bad { color: var(--critical); }
+.rel-pit {
+  color: var(--warning);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+#footer {
+  margin-top: 8px;
+  font-size: 10px;
+  color: var(--muted);
+  display: flex;
+  justify-content: space-between;
+}

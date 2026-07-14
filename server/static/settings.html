@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>PitStrategy Settings</title>
+  <link rel="stylesheet" href="/static/settings.css" />
+</head>
+<body>
+  <h1>PitStrategy Settings</h1>
+  <p class="hint">Changes apply live to the overlay -- no restart needed.</p>
+
+  <section>
+    <h2>Fuel calculations (rows)</h2>
+    <label><input type="checkbox" id="show_last_lap" /> Last lap</label>
+    <label><input type="checkbox" id="show_max_fuel" /> Max fuel</label>
+    <label><input type="checkbox" id="show_avg_fuel" /> 5-lap avg</label>
+    <label><input type="checkbox" id="show_quali_fuel" /> Quali fuel</label>
+  </section>
+
+  <section>
+    <h2>Fuel figures (columns)</h2>
+    <label><input type="checkbox" id="show_col_laps_left" /> Laps left</label>
+    <label><input type="checkbox" id="show_col_stint" /> Stint</label>
+    <label><input type="checkbox" id="show_col_finish" /> Finish</label>
+    <label><input type="checkbox" id="show_col_runout" /> Run out</label>
+  </section>
+
+  <section>
+    <h2>Other panels</h2>
+    <label><input type="checkbox" id="show_fuel_gauge" /> Fuel meter</label>
+    <label><input type="checkbox" id="show_fuel_targets" /> Target laps</label>
+    <label><input type="checkbox" id="show_tires" /> Tire values</label>
+    <label><input type="checkbox" id="show_relative" /> Ahead/behind deltas</label>
+  </section>
+
+  <p id="save-status"></p>
+
+  <script src="/static/settings.js"></script>
+</body>
+</html>

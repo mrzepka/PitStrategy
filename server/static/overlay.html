@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>PitStrategy Overlay</title>
+  <link rel="stylesheet" href="/static/overlay.css" />
+</head>
+<body>
+  <div id="hud">
+    <div class="main-row">
+      <div id="fuel-info-col">
+        <div class="rate-header">
+          <span></span>
+          <span title="Laps remaining on current fuel at this rate">Laps left</span>
+          <span title="Laps a full tank would last at this rate">Stint</span>
+          <span title="Fuel surplus/deficit at the end of the race at this rate, using the leader's pace to estimate laps remaining">Finish</span>
+          <span title="Next two laps you'd run dry at this rate, refueling to full each time">Run out</span>
+        </div>
+        <div class="info-box" id="last-lap-box">
+          <div class="stat-label">Last lap</div>
+          <div class="stat-row">
+            <span class="stat-value small" id="last-lap-fuel">–</span>
+            <span class="stat-laps-left" id="last-lap-fuel-laps">–</span>
+            <span class="stat-laps-left" id="last-lap-fuel-stint">–</span>
+            <span class="stat-laps-left" id="last-lap-fuel-finish">–</span>
+            <span class="stat-laps-left" id="last-lap-fuel-runout">–</span>
+          </div>
+        </div>
+        <div class="info-box" id="max-fuel-box">
+          <div class="stat-label">Max fuel</div>
+          <div class="stat-row">
+            <span class="stat-value small" id="fuel-max">–</span>
+            <span class="stat-laps-left" id="fuel-max-laps">–</span>
+            <span class="stat-laps-left" id="fuel-max-stint">–</span>
+            <span class="stat-laps-left" id="fuel-max-finish">–</span>
+            <span class="stat-laps-left" id="fuel-max-runout">–</span>
+          </div>
+        </div>
+        <div class="info-box" id="avg-fuel-box">
+          <div class="stat-label">5-lap avg</div>
+          <div class="stat-row">
+            <span class="stat-value small" id="fuel-per-lap">–</span>
+            <span class="stat-laps-left" id="fuel-per-lap-laps">–</span>
+            <span class="stat-laps-left" id="fuel-per-lap-stint">–</span>
+            <span class="stat-laps-left" id="fuel-per-lap-finish">–</span>
+            <span class="stat-laps-left" id="fuel-per-lap-runout">–</span>
+          </div>
+        </div>
+        <div class="info-box" id="quali-fuel-box">
+          <div class="stat-label">Quali fuel</div>
+          <div class="stat-row">
+            <span class="stat-value small" id="quali-fuel">–</span>
+            <span class="stat-laps-left" id="quali-fuel-laps">–</span>
+            <span class="stat-laps-left" id="quali-fuel-stint">–</span>
+            <span class="stat-laps-left" id="quali-fuel-finish">–</span>
+            <span class="stat-laps-left" id="quali-fuel-runout">–</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="fuel-gauge-col">
+        <div class="col-label">Fuel</div>
+        <div id="fuel-gauge">
+          <div id="fuel-gauge-zones"></div>
+          <div id="fuel-gauge-mask"></div>
+          <div id="fuel-gauge-label"></div>
+        </div>
+        <div class="gauge-caption" id="fuel-cap">–</div>
+      </div>
+    </div>
+
+    <div id="fuel-target-row"></div>
+
+    <div class="stat-grid" id="tire-stats">
+      <div class="stat-tile">
+        <div class="stat-label">Worst tire</div>
+        <div class="stat-value small" id="tire-worst">–</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-label">Tire temp</div>
+        <div class="stat-value small" id="tire-temp">–</div>
+      </div>
+    </div>
+
+    <div id="relative-panel" style="display:none">
+      <div class="relative-group">
+        <div class="relative-label">Ahead</div>
+        <div id="relative-ahead"></div>
+      </div>
+      <div class="relative-group">
+        <div class="relative-label">Behind</div>
+        <div id="relative-behind"></div>
+      </div>
+    </div>
+
+    <div id="footer">
+      <span id="conn-state">disconnected</span>
+      <span id="lap-num">Lap –</span>
+      <span>PitStrategy</span>
+    </div>
+  </div>
+  <script src="/static/overlay.js"></script>
+</body>
+</html>
