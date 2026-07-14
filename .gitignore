@@ -13,6 +13,8 @@ venv/
 # PyInstaller build output (pitstrategy.spec is tracked; its output isn't)
 build/
 dist/
+# Release zips are uploaded to GitHub Releases, not committed to the repo.
+*.zip
 
 # Local tooling state
 .claude/

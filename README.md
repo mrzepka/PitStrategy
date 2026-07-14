@@ -8,23 +8,31 @@ there's no pre-race stint planner wired into the running app right now (see
 
 ## TL;DR
 
-**Get it running:**
+**Get it running (no Python needed):**
 
-1. On the GitHub page, click **Code → Download ZIP** (or `git clone` the
-   repo if you have git), then extract it somewhere.
-2. The built `.exe` is **not** included in the download — `dist/`/`build/`
-   are gitignored (generated output, not source). Build it yourself, once,
-   from a terminal in the extracted folder:
-   ```
-   pip install -r requirements.txt -r requirements-build.txt
-   pyinstaller pitstrategy.spec --noconfirm
-   ```
-   (Needs Python 3.11+ installed and on `PATH`. This takes a minute or so
-   and only needs redoing if you pull newer source later.)
-3. Open `dist\PitStrategy\` and double-click **`PitStrategy.exe`**. A
+1. Grab the latest `PitStrategy-win64.zip` from
+   [Releases](https://github.com/mrzepka/PitStrategy/releases/latest) and
+   extract it anywhere.
+2. Open the extracted folder and double-click **`PitStrategy.exe`**. A
    console window opens (deliberate, see
    [Building a standalone executable](#building-a-standalone-executable)),
    then the overlay and settings windows appear a couple seconds later.
+3. Needs the WebView2 runtime, which comes preinstalled on most current
+   Windows 10/11 systems. If the exe won't launch, that's the first thing
+   to check — Microsoft's WebView2 installer is a small, free download.
+
+Prefer to build it yourself from source instead (e.g. to get unreleased
+changes, or because you don't want to run a downloaded binary)? Click
+**Code → Download ZIP** on the repo page (or `git clone` it), then from a
+terminal in that folder:
+```
+pip install -r requirements.txt -r requirements-build.txt
+pyinstaller pitstrategy.spec --noconfirm
+```
+(Needs Python 3.11+ on `PATH`.) That produces the same `dist\PitStrategy\`
+folder the Release zip already contains — `dist/`/`build/` are gitignored
+(generated output, not source), which is why a source download alone
+doesn't already have a `.exe` in it.
 
 **Use it:**
 
@@ -90,8 +98,19 @@ fuel, tires, live pit window) and `http://127.0.0.1:8734/settings`.
 
 ## Building a standalone executable
 
-For day-to-day use you don't need a terminal at all: `pitstrategy.spec`
-builds a real Windows `.exe` via [PyInstaller](https://pyinstaller.org/).
+Prebuilt zips are published on
+[GitHub Releases](https://github.com/mrzepka/PitStrategy/releases) -- most
+people won't need to build this themselves at all, see
+[TL;DR](#tldr) above. Releases are cut manually (no CI/GitHub Actions set
+up for this yet -- deliberate for now, since this is a low-frequency solo
+project and it's easy to add automation later if that changes) whenever
+there's something worth shipping: build fresh from `pitstrategy.spec`, zip
+`dist/PitStrategy/`, `git tag vX.Y.Z`,
+`gh release create vX.Y.Z PitStrategy-win64.zip`.
+
+For day-to-day development you don't need a terminal at all once built:
+`pitstrategy.spec` builds a real Windows `.exe` via
+[PyInstaller](https://pyinstaller.org/).
 
 ```
 pip install -r requirements-build.txt
