@@ -9,39 +9,65 @@
   <h1>PitStrategy Settings</h1>
   <p class="hint">Changes apply live to the overlay -- no restart needed.</p>
 
-  <section>
-    <h2>Fuel calculations (rows)</h2>
-    <label><input type="checkbox" id="show_last_lap" /> Last lap</label>
-    <label><input type="checkbox" id="show_max_fuel" /> Max fuel</label>
-    <label><input type="checkbox" id="show_avg_fuel" /> 5-lap avg</label>
-    <label><input type="checkbox" id="show_quali_fuel" /> Quali fuel</label>
-  </section>
+  <div class="settings-grid">
+    <section>
+      <h2>Fuel calculations (rows)</h2>
+      <label><input type="checkbox" id="show_last_lap" /> Last lap</label>
+      <label><input type="checkbox" id="show_max_fuel" /> Max fuel</label>
+      <label><input type="checkbox" id="show_avg_fuel" /> 5-lap avg</label>
+      <label><input type="checkbox" id="show_quali_fuel" /> Quali fuel</label>
+    </section>
 
-  <section>
-    <h2>Fuel figures (columns)</h2>
-    <label><input type="checkbox" id="show_col_laps_left" /> Laps left</label>
-    <label><input type="checkbox" id="show_col_stint" /> Stint</label>
-    <label><input type="checkbox" id="show_col_finish" /> Finish</label>
-    <label><input type="checkbox" id="show_col_runout" /> Run out</label>
-    <label><input type="checkbox" id="show_final_window" /> Final pit (final-window indicator)</label>
-  </section>
+    <section>
+      <h2>Fuel figures (columns)</h2>
+      <label><input type="checkbox" id="show_col_laps_left" /> Laps left</label>
+      <label><input type="checkbox" id="show_col_stint" /> Stint</label>
+      <label><input type="checkbox" id="show_col_finish" /> Finish</label>
+      <label><input type="checkbox" id="show_col_runout" /> Run out</label>
+      <label><input type="checkbox" id="show_final_window" /> Final pit</label>
+    </section>
 
-  <section>
-    <h2>Other panels</h2>
-    <label><input type="checkbox" id="show_fuel_gauge" /> Fuel meter</label>
-    <label><input type="checkbox" id="show_fuel_targets" /> Target laps</label>
-    <label><input type="checkbox" id="show_tires" /> Tire values</label>
-    <label><input type="checkbox" id="show_relative" /> Ahead/behind deltas</label>
-  </section>
+    <section>
+      <h2>Other panels</h2>
+      <label><input type="checkbox" id="show_fuel_gauge" /> Fuel meter</label>
+      <label><input type="checkbox" id="show_fuel_targets" /> Target laps</label>
+      <label><input type="checkbox" id="show_tires" /> Tire values</label>
+      <label><input type="checkbox" id="show_relative" /> Ahead/behind deltas</label>
+    </section>
 
-  <section>
-    <h2>Overlay zoom</h2>
-    <label class="zoom-label">
-      Zoom
-      <input type="number" id="zoom_pct" min="60" max="200" step="5" /> %
-    </label>
-    <p class="hint">Also settable by dragging the overlay's bottom-right corner.</p>
-  </section>
+    <section>
+      <h2>Auto pit fuel</h2>
+      <label><input type="checkbox" id="auto_fuel_enabled" /> Auto-add on pit entry</label>
+      <label class="zoom-label">
+        Use
+        <select id="auto_fuel_source"></select>
+      </label>
+      <p class="hint">Requests enough fuel to finish the race at the selected rate the moment you enter pit road. Only rows checked on above are selectable. You still need to drive into your pit stall for it to take effect.</p>
+    </section>
+  </div>
+
+  <div class="settings-grid">
+    <section>
+      <h2>Overlay zoom</h2>
+      <label class="zoom-label">
+        Zoom
+        <input type="number" id="zoom_pct" min="60" max="200" step="5" /> %
+      </label>
+      <p class="hint">Also settable by dragging the overlay's bottom-right corner.</p>
+    </section>
+
+    <section>
+      <h2>Units</h2>
+      <label class="zoom-label">
+        Fuel volume
+        <select id="fuel_units">
+          <option value="liters">Liters</option>
+          <option value="gallons">Gallons (US)</option>
+        </select>
+      </label>
+      <p class="hint">Applies to every fuel figure on the overlay (rates, tank size, Finish margin, targets).</p>
+    </section>
+  </div>
 
   <p id="save-status"></p>
 

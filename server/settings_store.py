@@ -5,6 +5,7 @@ where the working directory isn't something the user controls.
 """
 import os
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -36,6 +37,24 @@ class OverlaySettings(BaseModel):
     # overlay.js's MIN_SCALE/MAX_SCALE -- kept in sync by hand since this is
     # the only place outside JS that needs to know them.
     zoom: float = Field(default=1.0, ge=0.6, le=2.0)
+    # Auto pit fuel: the moment StrategyEngine detects the player's car
+    # entering pit road, it sends (via iRacing's SDK pit-service broadcast)
+    # enough fuel to finish the race at the selected rate -- reusing
+    # whichever of the four "Fuel calculations (rows)" figures
+    # auto_fuel_source names, rather than a manually-typed liters value.
+    # Off by default -- this actually submits a real request to the sim,
+    # not just a display feature, so it shouldn't ever fire without the
+    # user explicitly opting in. auto_fuel_source is only ever set by
+    # settings.js to one of the four rows currently checked *on* in the
+    # "Fuel calculations (rows)" section above; None means no source has
+    # been picked yet (or its row got unchecked and the pick was cleared).
+    auto_fuel_enabled: bool = False
+    auto_fuel_source: Literal["last_lap", "max_fuel", "avg_fuel", "quali_fuel"] | None = None
+    # Display-only -- every value stays in liters everywhere else (fuel.py's
+    # tracking math, the SDK pit-fuel request, the websocket payload).
+    # overlay.js converts liters -> US gallons at render time when this is
+    # "gallons", purely for the text shown on screen.
+    fuel_units: Literal["liters", "gallons"] = "liters"
 
 
 def load_settings() -> OverlaySettings:

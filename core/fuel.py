@@ -3,7 +3,9 @@
 Feed it a (lap, fuel_level) sample on every telemetry tick via `update()`.
 It only records a per-lap usage sample when the lap number advances, and
 discards any sample where fuel went *up* (a refuel happened) instead of
-letting it corrupt the rolling average.
+letting it corrupt the rolling average. That same "fuel went up" signal
+also marks the start of a new stint, so `stint_start_fuel_level` (how much
+fuel this stint actually started with) gets snapshotted right there too.
 """
 import sys
 import threading
@@ -22,6 +24,7 @@ class FuelState:
     max_fuel_l: float | None = None  # raw override-or-detected tank size, before the % cap
     fuel_pct_available: float = 100.0
     last_lap_fuel_per_lap: float | None = None  # most recent single-lap usage (not the rolling average)
+    stint_start_fuel_level: float | None = None  # fuel level captured at the start of the current stint
 
 
 class FuelTracker:
@@ -33,6 +36,11 @@ class FuelTracker:
         self._fuel_at_lap_start: float | None = None
         self._current_fuel: float = 0.0
         self._max_fuel_per_lap: float | None = None
+        # Fuel level snapshotted once at the start of the current stint (the
+        # first tick tracking sees, or the tick right after a refuel is
+        # detected) and held fixed for the rest of that stint -- not
+        # recomputed lap to lap the way current_fuel_level is.
+        self._stint_start_fuel_level: float | None = None
 
         # Manual fuel-limit override, e.g. a league rule capping usable fuel
         # below the car's physical tank. Guarded by its own lock since,
@@ -89,6 +97,7 @@ class FuelTracker:
         self._last_lap = None
         self._fuel_at_lap_start = None
         self._max_fuel_per_lap = None
+        self._stint_start_fuel_level = None
 
     def update(self, lap: int, fuel_level: float) -> None:
         self._current_fuel = fuel_level
@@ -96,6 +105,7 @@ class FuelTracker:
         if self._last_lap is None:
             self._last_lap = lap
             self._fuel_at_lap_start = fuel_level
+            self._stint_start_fuel_level = fuel_level
             print(
                 f"[PitStrategy] fuel: tracking (re)started at lap={lap} "
                 f"fuel_level={fuel_level:.3f}L -- if this lap wasn't actually just starting "
@@ -128,12 +138,20 @@ class FuelTracker:
                     file=sys.stderr,
                 )
             else:
+                # Fuel went up (or stayed flat) -- a refuel happened, so a
+                # new stint is starting. `fuel_level` here is what's in the
+                # tank as this new stint begins -- snapshot it and hold it
+                # fixed until the *next* refuel, rather than letting it
+                # shrink lap to lap the way current_fuel_level does.
                 print(
                     f"[PitStrategy] fuel: lap {self._last_lap}->{lap} "
                     f"fuel {self._fuel_at_lap_start:.3f}L -> {fuel_level:.3f}L "
-                    f"(delta={delta:.3f}L, went up or flat) -- discarded as a refuel/outlier",
+                    f"(delta={delta:.3f}L, went up or flat) -- discarded as a refuel/outlier, "
+                    f"stint_start_fuel_level reset from {self._stint_start_fuel_level!r} to "
+                    f"{fuel_level:.3f}",
                     file=sys.stderr,
                 )
+                self._stint_start_fuel_level = fuel_level
 
         self._last_lap = lap
         self._fuel_at_lap_start = fuel_level
@@ -165,4 +183,5 @@ class FuelTracker:
             max_fuel_l=max_fuel_l,
             fuel_pct_available=pct,
             last_lap_fuel_per_lap=self.last_lap_fuel_per_lap,
+            stint_start_fuel_level=self._stint_start_fuel_level,
         )

@@ -30,6 +30,7 @@ def create_app(demo: bool = False) -> FastAPI:
         engine.start()
         app.state.engine = engine
         app.state.settings = load_settings()
+        engine.set_overlay_settings(app.state.settings.auto_fuel_enabled, app.state.settings.auto_fuel_source)
 
         try:
             yield
@@ -76,6 +77,7 @@ def create_app(demo: bool = False) -> FastAPI:
     async def api_post_settings(payload: OverlaySettings) -> OverlaySettings:
         app.state.settings = payload
         save_settings(payload)
+        app.state.engine.set_overlay_settings(payload.auto_fuel_enabled, payload.auto_fuel_source)
         return payload
 
     @app.post("/api/fuel-limit")

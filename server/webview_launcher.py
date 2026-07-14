@@ -36,8 +36,8 @@ WIDTH = 440
 HEIGHT = 420
 OVERLAY_WINDOW_TITLE = "PitStrategy Overlay"
 
-SETTINGS_WIDTH = 340
-SETTINGS_HEIGHT = 560
+SETTINGS_WIDTH = 500
+SETTINGS_HEIGHT = 540
 SETTINGS_WINDOW_TITLE = "PitStrategy Settings"
 
 # 0 (fully invisible) - 255 (fully opaque), applied uniformly to the whole

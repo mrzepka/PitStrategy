@@ -62,3 +62,40 @@ def test_load_settings_falls_back_to_defaults_when_zoom_out_of_bounds():
     # corrupt-file-fallback path as invalid JSON, not silently clamped.
     _settings_path().write_text(json.dumps({"zoom": 5.0}))
     assert load_settings() == OverlaySettings()
+
+
+def test_auto_fuel_defaults_to_disabled_with_no_source():
+    settings = OverlaySettings()
+    assert settings.auto_fuel_enabled is False
+    assert settings.auto_fuel_source is None
+
+
+def test_auto_fuel_round_trips():
+    original = OverlaySettings(auto_fuel_enabled=True, auto_fuel_source="max_fuel")
+    save_settings(original)
+    loaded = load_settings()
+    assert loaded.auto_fuel_enabled is True
+    assert loaded.auto_fuel_source == "max_fuel"
+
+
+def test_load_settings_falls_back_to_defaults_when_auto_fuel_source_invalid():
+    # auto_fuel_source is a closed set (one of the four fuel-calculation rows)
+    # -- an unrecognized value fails pydantic validation entirely, same
+    # corrupt-file-fallback path as invalid JSON, not silently ignored.
+    _settings_path().write_text(json.dumps({"auto_fuel_source": "not_a_real_source"}))
+    assert load_settings() == OverlaySettings()
+
+
+def test_fuel_units_defaults_to_liters():
+    assert OverlaySettings().fuel_units == "liters"
+
+
+def test_fuel_units_round_trips():
+    original = OverlaySettings(fuel_units="gallons")
+    save_settings(original)
+    assert load_settings().fuel_units == "gallons"
+
+
+def test_load_settings_falls_back_to_defaults_when_fuel_units_invalid():
+    _settings_path().write_text(json.dumps({"fuel_units": "furlongs"}))
+    assert load_settings() == OverlaySettings()

@@ -36,6 +36,16 @@ const tireWorst = document.getElementById("tire-worst");
 const tireTemp = document.getElementById("tire-temp");
 const lapNum = document.getElementById("lap-num");
 const connState = document.getElementById("conn-state");
+const fuelCommandLine = document.getElementById("fuel-command-line");
+
+// Matches settings.js's AUTO_FUEL_SOURCES labels, just keyed for lookup
+// here instead of iterated for a dropdown.
+const AUTO_FUEL_SOURCE_LABELS = {
+  last_lap: "Last lap",
+  max_fuel: "Max fuel",
+  avg_fuel: "5-lap avg",
+  quali_fuel: "Quali fuel",
+};
 const relativePanel = document.getElementById("relative-panel");
 const fuelTargetRow = document.getElementById("fuel-target-row");
 const relativeAhead = document.getElementById("relative-ahead");
@@ -247,6 +257,30 @@ function fmt(value, digits = 1, suffix = "") {
   return value.toFixed(digits) + suffix;
 }
 
+// Display-only unit conversion -- every value server-side (fuel.py's
+// tracking math, the SDK pit-fuel request in engine.py) stays in liters
+// regardless of this setting; only what's shown on screen changes. Laps-
+// based figures (Laps left, Stint, Run out, Final pit) never need this:
+// they're all ratios of volume / rate, and both sides of that ratio get
+// converted the same way, so the laps count comes out identical either
+// unit. Only bare volume numbers (rates, tank capacity, Finish margin,
+// fuel targets) actually need conversion.
+const L_PER_US_GAL = 3.785411784;
+
+function volumeUnit() {
+  return latestSettings.fuel_units === "gallons" ? "gallons" : "liters";
+}
+
+function toDisplayVolume(liters) {
+  if (liters === null || liters === undefined) return liters;
+  return volumeUnit() === "gallons" ? liters / L_PER_US_GAL : liters;
+}
+
+function volumeSuffix(perLap) {
+  const unit = volumeUnit() === "gallons" ? "gal" : "L";
+  return perLap ? ` ${unit}/lap` : ` ${unit}`;
+}
+
 function fmtLapTime(seconds) {
   if (seconds === null || seconds === undefined) return "–";
   const m = Math.floor(seconds / 60);
@@ -264,13 +298,16 @@ function lapsLeftText(ratePerLap, currentFuelLevel) {
   return (currentFuelLevel / ratePerLap).toFixed(2);
 }
 
-// "If I ran a whole fresh stint at this rate, how many laps would a full
-// tank last" -- same idea as lapsLeftText() but against tank capacity
-// instead of whatever's currently in the tank, so it doesn't shrink lap to
-// lap the way the "Now" column does.
-function stintLengthText(ratePerLap, tankCapacity) {
-  if (!ratePerLap || ratePerLap <= 0 || !tankCapacity || tankCapacity <= 0) return "–";
-  return (tankCapacity / ratePerLap).toFixed(2);
+// "How many laps will the fuel I actually left the pits with get me" --
+// stintStartFuelLevel is captured once, server-side, at the start of the
+// current stint (fuel.stint_start_fuel_level, from core/fuel.py's
+// FuelTracker) and held fixed until the next refuel, unlike
+// currentFuelLevel which shrinks lap to lap. So this is a stable "this
+// stint is an N-lap stint" reference, not a countdown -- lapsLeftText()
+// already covers the countdown.
+function stintLengthText(ratePerLap, stintStartFuelLevel) {
+  if (!ratePerLap || ratePerLap <= 0 || stintStartFuelLevel === null || stintStartFuelLevel === undefined) return "–";
+  return (stintStartFuelLevel / ratePerLap).toFixed(2);
 }
 
 // "If I ran the rest of the race at this rate, would what's in the tank be
@@ -285,7 +322,8 @@ function applyFinishMargin(el, ratePerLap, currentFuelLevel, lapsRemainingLeader
     el.textContent = "–";
     return;
   }
-  const margin = currentFuelLevel - lapsRemainingLeaderPace * ratePerLap;
+  const marginL = currentFuelLevel - lapsRemainingLeaderPace * ratePerLap;
+  const margin = toDisplayVolume(marginL);
   const sign = margin >= 0 ? "+" : "";
   el.textContent = `${sign}${margin.toFixed(2)}`;
   el.classList.add(margin >= 0 ? "finish-ok" : "finish-critical");
@@ -390,7 +428,7 @@ function renderFuelTargets(fuel) {
     cell.className = "fuel-target-cell";
     cell.innerHTML = `
       <div class="fuel-target-lap">${targetLaps} laps</div>
-      <div class="fuel-target-rate">${targetRate.toFixed(3)} L/lap</div>
+      <div class="fuel-target-rate">${toDisplayVolume(targetRate).toFixed(3)}${volumeSuffix(true)}</div>
     `;
     fuelTargetRow.appendChild(cell);
   }
@@ -479,22 +517,23 @@ function render(data) {
   const fuel = data.fuel || {};
   const currentFuelLevel = fuel.current_fuel_level;
   const tankCapacity = fuel.tank_capacity;
+  const stintStartFuelLevel = fuel.stint_start_fuel_level;
   const currentLap = data.lap;
   const lapsRemainingLeaderPace = data.laps_remaining_leader_pace;
-  fuelPerLap.textContent = fmt(fuel.avg_fuel_per_lap, 3, " L/lap");
+  fuelPerLap.textContent = fmt(toDisplayVolume(fuel.avg_fuel_per_lap), 3, volumeSuffix(true));
   fuelPerLapLaps.textContent = lapsLeftText(fuel.avg_fuel_per_lap, currentFuelLevel);
-  fuelPerLapStint.textContent = stintLengthText(fuel.avg_fuel_per_lap, tankCapacity);
+  fuelPerLapStint.textContent = stintLengthText(fuel.avg_fuel_per_lap, stintStartFuelLevel);
   applyFinishMargin(fuelPerLapFinish, fuel.avg_fuel_per_lap, currentFuelLevel, lapsRemainingLeaderPace);
   applyRunout(fuelPerLapRunout, fuel.avg_fuel_per_lap, currentLap, currentFuelLevel, tankCapacity);
   applyFinalWindow(fuelPerLapFinalWindow, fuel.avg_fuel_per_lap, tankCapacity, lapsRemainingLeaderPace);
-  fuelMax.textContent = fmt(fuel.max_fuel_per_lap, 3, " L/lap");
+  fuelMax.textContent = fmt(toDisplayVolume(fuel.max_fuel_per_lap), 3, volumeSuffix(true));
   fuelMaxLaps.textContent = lapsLeftText(fuel.max_fuel_per_lap, currentFuelLevel);
-  fuelMaxStint.textContent = stintLengthText(fuel.max_fuel_per_lap, tankCapacity);
+  fuelMaxStint.textContent = stintLengthText(fuel.max_fuel_per_lap, stintStartFuelLevel);
   applyFinishMargin(fuelMaxFinish, fuel.max_fuel_per_lap, currentFuelLevel, lapsRemainingLeaderPace);
   applyRunout(fuelMaxRunout, fuel.max_fuel_per_lap, currentLap, currentFuelLevel, tankCapacity);
   applyFinalWindow(fuelMaxFinalWindow, fuel.max_fuel_per_lap, tankCapacity, lapsRemainingLeaderPace);
   fuelCap.textContent = fuel.tank_capacity !== null && fuel.tank_capacity !== undefined
-    ? fmt(fuel.tank_capacity, 2, " L") + (fuel.fuel_pct_available && fuel.fuel_pct_available !== 100 ? ` (×${fuel.fuel_pct_available.toFixed(1)}%)` : "")
+    ? fmt(toDisplayVolume(fuel.tank_capacity), 2, volumeSuffix(false)) + (fuel.fuel_pct_available && fuel.fuel_pct_available !== 100 ? ` (×${fuel.fuel_pct_available.toFixed(1)}%)` : "")
     : "–";
   renderFuelGauge(fuel);
   renderFuelTargets(fuel);
@@ -503,17 +542,17 @@ function render(data) {
   const showQuali = qualiBaseline && (data.settings || {}).show_quali_fuel !== false;
   qualiFuelBox.style.display = showQuali ? "" : "none";
   if (qualiBaseline) {
-    qualiFuel.textContent = fmt(qualiBaseline.fuel_per_lap, 3, " L/lap");
+    qualiFuel.textContent = fmt(toDisplayVolume(qualiBaseline.fuel_per_lap), 3, volumeSuffix(true));
     qualiFuelLaps.textContent = lapsLeftText(qualiBaseline.fuel_per_lap, currentFuelLevel);
-    qualiFuelStint.textContent = stintLengthText(qualiBaseline.fuel_per_lap, tankCapacity);
+    qualiFuelStint.textContent = stintLengthText(qualiBaseline.fuel_per_lap, stintStartFuelLevel);
     applyFinishMargin(qualiFuelFinish, qualiBaseline.fuel_per_lap, currentFuelLevel, lapsRemainingLeaderPace);
     applyRunout(qualiFuelRunout, qualiBaseline.fuel_per_lap, currentLap, currentFuelLevel, tankCapacity);
     applyFinalWindow(qualiFuelFinalWindow, qualiBaseline.fuel_per_lap, tankCapacity, lapsRemainingLeaderPace);
   }
 
-  lastLapFuel.textContent = fmt(fuel.last_lap_fuel_per_lap, 3, " L/lap");
+  lastLapFuel.textContent = fmt(toDisplayVolume(fuel.last_lap_fuel_per_lap), 3, volumeSuffix(true));
   lastLapFuelLaps.textContent = lapsLeftText(fuel.last_lap_fuel_per_lap, currentFuelLevel);
-  lastLapFuelStint.textContent = stintLengthText(fuel.last_lap_fuel_per_lap, tankCapacity);
+  lastLapFuelStint.textContent = stintLengthText(fuel.last_lap_fuel_per_lap, stintStartFuelLevel);
   applyFinishMargin(lastLapFuelFinish, fuel.last_lap_fuel_per_lap, currentFuelLevel, lapsRemainingLeaderPace);
   applyRunout(lastLapFuelRunout, fuel.last_lap_fuel_per_lap, currentLap, currentFuelLevel, tankCapacity);
   applyFinalWindow(lastLapFinalWindow, fuel.last_lap_fuel_per_lap, tankCapacity, lapsRemainingLeaderPace);
@@ -529,6 +568,11 @@ function render(data) {
   renderRelativeGroup(relativeBehind, relative.behind);
   const showRelative = (relative.ahead.length || relative.behind.length) && (data.settings || {}).show_relative !== false;
   relativePanel.style.display = showRelative ? "" : "none";
+
+  const fuelCommand = data.last_fuel_command;
+  fuelCommandLine.textContent = fuelCommand
+    ? `Pit fuel: ${toDisplayVolume(fuelCommand.amount_l).toFixed(1)}${volumeSuffix(false)} (${AUTO_FUEL_SOURCE_LABELS[fuelCommand.source] || fuelCommand.source}) ${fuelCommand.sent ? "sent" : "FAILED"}`
+    : "";
 
   fitWindowToContent();
 }

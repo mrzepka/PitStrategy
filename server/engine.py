@@ -20,11 +20,22 @@ from core.tires import TireTracker
 COMPUTE_HZ = 5.0
 _LAP_TIME_HISTORY = 5
 
+# Maps settings_store.py's OverlaySettings.auto_fuel_source values to the
+# matching FuelState rate -- same four rates the "Fuel calculations (rows)"
+# settings toggle the display of, so auto-fuel always sources from one of
+# the numbers already on the HUD rather than a separately-typed value.
+_AUTO_FUEL_RATE_FIELD = {
+    "last_lap": "last_lap_fuel_per_lap",
+    "max_fuel": "max_fuel_per_lap",
+    "avg_fuel": "avg_fuel_per_lap",
+}
+
 
 class TelemetrySource(Protocol):
     def start(self) -> None: ...
     def stop(self) -> None: ...
     def get_state(self) -> TelemetryState: ...
+    def send_pit_fuel(self, liters: float) -> bool: ...
 
 
 class StrategyEngine:
@@ -46,6 +57,17 @@ class StrategyEngine:
 
         self._session_tracker = SessionTransitionTracker()
         self._qualifying_baseline: SessionBaseline | None = None
+
+        # Auto pit fuel: written from the request-handling thread via
+        # set_overlay_settings() (mirroring set_fuel_limit()'s pattern),
+        # read from the background poll thread in _tick(). Guarded by
+        # _settings_lock rather than _lock since it's updated independently
+        # of _latest and there's no need to serialize the two.
+        self._settings_lock = threading.Lock()
+        self._auto_fuel_enabled = False
+        self._auto_fuel_source: str | None = None
+        self._was_on_pit_road = False
+        self._last_fuel_command: dict | None = None
 
     def start(self) -> None:
         self._source.start()
@@ -78,6 +100,11 @@ class StrategyEngine:
     def qualifying_baseline(self) -> SessionBaseline | None:
         with self._lock:
             return self._qualifying_baseline
+
+    def set_overlay_settings(self, auto_fuel_enabled: bool, auto_fuel_source: str | None) -> None:
+        with self._settings_lock:
+            self._auto_fuel_enabled = auto_fuel_enabled
+            self._auto_fuel_source = auto_fuel_source
 
     def _run(self) -> None:
         while not self._stop_event.is_set():
@@ -192,6 +219,31 @@ class StrategyEngine:
             self._last_lap = None
             self._last_lap_time = None
             self._lap_time_samples = []
+            self._was_on_pit_road = False
+
+        player_on_pit_road = False
+        if (
+            state.player_car_idx is not None
+            and state.player_car_idx < len(state.car_idx_on_pit_road)
+        ):
+            player_on_pit_road = bool(state.car_idx_on_pit_road[state.player_car_idx])
+        entered_pit_road = player_on_pit_road and not self._was_on_pit_road
+        self._was_on_pit_road = player_on_pit_road
+        with self._settings_lock:
+            auto_fuel_enabled = self._auto_fuel_enabled
+            auto_fuel_source = self._auto_fuel_source
+        if entered_pit_road:
+            # Logged unconditionally -- pit-road entry itself is detected
+            # regardless of whether the auto-fuel feature is turned on, so
+            # this line is the only way to confirm CarIdxOnPitRoad detection
+            # is actually working (e.g. before ever enabling the feature).
+            # The actual send happens further down, once fuel_state and
+            # laps_remaining_leader_pace (needed to size the request) exist.
+            print(
+                f"[PitStrategy] pit road entry detected at lap={state.lap} "
+                f"(auto_fuel_enabled={auto_fuel_enabled}, auto_fuel_source={auto_fuel_source!r})",
+                file=sys.stderr,
+            )
 
         self._fuel.set_tank_capacity(state.tank_capacity)
         self._fuel.update(state.lap, state.fuel_level)
@@ -262,6 +314,46 @@ class StrategyEngine:
             else None
         )
 
+        if entered_pit_road and auto_fuel_enabled and auto_fuel_source:
+            if auto_fuel_source == "quali_fuel":
+                rate = self._qualifying_baseline.fuel_per_lap if self._qualifying_baseline is not None else None
+            else:
+                rate = getattr(fuel_state, _AUTO_FUEL_RATE_FIELD[auto_fuel_source])
+
+            if not rate or rate <= 0 or laps_remaining_leader_pace is None or not fuel_state.tank_capacity:
+                print(
+                    f"[PitStrategy] auto pit fuel: skipped -- missing data for source={auto_fuel_source!r} "
+                    f"(rate={rate!r}, laps_remaining_leader_pace={laps_remaining_leader_pace!r}, "
+                    f"tank_capacity={fuel_state.tank_capacity!r})",
+                    file=sys.stderr,
+                )
+            else:
+                # Enough to have exactly what's needed to finish at this
+                # rate, not a full tank -- mirrors the "Finish" column's own
+                # math (current fuel vs. laps-remaining-at-leader-pace * rate),
+                # just solved for "how much more to add" instead of "what's
+                # the margin." Clamped so this never asks for more than the
+                # tank can physically hold.
+                fuel_needed = laps_remaining_leader_pace * rate
+                amount = fuel_needed - fuel_state.current_fuel_level
+                amount = max(0.0, min(amount, fuel_state.tank_capacity - fuel_state.current_fuel_level))
+                if amount <= 0.05:
+                    print(
+                        f"[PitStrategy] auto pit fuel: skipped -- already enough fuel to finish at "
+                        f"source={auto_fuel_source!r} rate={rate:.3f} L/lap (needed={fuel_needed:.2f}L, "
+                        f"current={fuel_state.current_fuel_level:.2f}L)",
+                        file=sys.stderr,
+                    )
+                else:
+                    sent = self._source.send_pit_fuel(amount)
+                    print(
+                        f"[PitStrategy] auto pit fuel: requested {amount:.1f}L to finish at "
+                        f"source={auto_fuel_source!r} rate={rate:.3f} L/lap (sent={sent})",
+                        file=sys.stderr,
+                    )
+                    with self._lock:
+                        self._last_fuel_command = {"amount_l": amount, "source": auto_fuel_source, "sent": sent}
+
         with self._lock:
             self._latest = {
                 "connected": True,
@@ -277,6 +369,7 @@ class StrategyEngine:
                 "tires": asdict(tire_state),
                 "strategy": asdict(strategy),
                 "qualifying_baseline": asdict(self._qualifying_baseline) if self._qualifying_baseline is not None else None,
+                "last_fuel_command": self._last_fuel_command,
                 "relative": {
                     "ahead": [asdict(c) for c in nearby["ahead"]],
                     "behind": [asdict(c) for c in nearby["behind"]],

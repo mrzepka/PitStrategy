@@ -174,6 +174,22 @@ class IRSDKTelemetrySource:
         except Exception:
             return None
 
+    def send_pit_fuel(self, liters: float) -> bool:
+        """Sets the pit stall's requested fuel-add amount via iRacing's SDK
+        pit-service broadcast (the same mechanism the in-car pit menu uses)
+        -- not a chat command. Requires being connected; still requires
+        actually driving into the pit stall for it to take effect."""
+        if not self._ir.is_initialized or not self._ir.is_connected:
+            return False
+        import irsdk  # deferred import, same reasoning as __init__'s
+
+        try:
+            self._ir.pit_command(irsdk.PitCommandMode.fuel, round(liters))
+            return True
+        except Exception:
+            return False
+
+
 class DemoTelemetrySource:
     """Synthetic telemetry: fuel drains, tires wear, laps tick over, and a
     pit stop happens automatically every ~12 laps so the overlay's
@@ -204,6 +220,13 @@ class DemoTelemetrySource:
         # iRacing telemetry does, not just once per lap.
         self._current_lap_fuel_rate = self._fuel_per_lap
         self._total_laps = 40
+        # Brief synthetic window during which the player's own car reports
+        # as being on pit road, so the auto-pit-fuel feature (which fires on
+        # the rising edge of that signal) has something to exercise in
+        # --demo -- set for a few seconds around the same every-12-laps
+        # refuel event that already simulates a pit stop.
+        self._player_pit_road_until = 0.0
+        self.last_commanded_fuel: float | None = None
 
         # Scripted session transition: starts in a qualifying-type session
         # for a handful of laps, then moves on to the race, so the
@@ -249,6 +272,8 @@ class DemoTelemetrySource:
                 car_idx_on_pit_road[2] = True  # a car ahead pits
             if self._lap == 7:
                 car_idx_on_pit_road[5] = True  # a car behind pits
+            if time.monotonic() < self._player_pit_road_until:
+                car_idx_on_pit_road[self._player_car_idx] = True
 
             return TelemetryState(
                 connected=True,
@@ -316,12 +341,20 @@ class DemoTelemetrySource:
                             40.0, min(self._tire_temps[name] + random.uniform(-2.0, 3.0), 110.0)
                         )
 
-                    if self._lap % 12 == 0:
+                    # self._lap > 0 excludes the lap==0 the quali->race
+                    # transition just reset us to a few lines up -- without
+                    # it, this fires a second, redundant "pit stop" (and now
+                    # a false player-on-pit-road signal) right at session
+                    # start instead of only at real in-race intervals.
+                    if self._lap > 0 and self._lap % 12 == 0:
                         self._fuel = self._tank_capacity
                         for name in self._wear:
                             self._wear[name] = 1.0
                         for name in self._tire_temps:
                             self._tire_temps[name] = 75.0  # fresh tires, back to a baseline temp
+                        # A few seconds of "on pit road" around this same
+                        # refuel event -- see __init__'s comment.
+                        self._player_pit_road_until = now + 3.0
 
                     for idx, offset in self._car_lap_time_offsets.items():
                         self._car_last_lap_time[idx] = round(
@@ -331,3 +364,10 @@ class DemoTelemetrySource:
                     if self._lap >= self._total_laps:
                         self._lap = 0
             time.sleep(self._poll_interval)
+
+    def send_pit_fuel(self, liters: float) -> bool:
+        """No real sim to write to -- just records the request so the demo
+        path exercises the same code path as the live source."""
+        with self._lock:
+            self.last_commanded_fuel = liters
+        return True

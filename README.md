@@ -311,9 +311,17 @@ small **Laps left / Stint / Finish / Run out / Final pit** header:
 
 - **Laps left** — `current fuel level ÷ that rate`: how many laps you'd get
   out of what's currently in the tank if you kept running at that pace.
-- **Stint** — `tank capacity ÷ that rate`: how many laps a *full* tank
-  would last at that pace, for planning your next stint rather than
-  judging what's left of this one.
+- **Stint** — `stint start fuel level ÷ that rate`: how many laps the fuel
+  you actually left the pits with will get you. Unlike Laps left, this
+  doesn't shrink as you drive — the fuel amount is captured once, at the
+  start of the current stint, and held fixed until your next stop, so it
+  reads as a stable "this stint is an N-lap stint" reference rather than a
+  countdown. Tracked server-side (`core/fuel.py`'s
+  `FuelTracker._stint_start_fuel_level`, sent as
+  `fuel.stint_start_fuel_level`), snapshotted the moment a refuel is
+  detected — the same fuel-went-up signal already used to reject refuel
+  outliers from the rolling average, reused here as "a new stint just
+  started."
 - **Finish** — `current fuel level − (leader-pace laps remaining × that
   rate)`: the fuel surplus or deficit at the end of the race *if you kept
   running at that specific rate the rest of the way*, shown as a solid
@@ -426,6 +434,16 @@ the overlay are shown, without editing any code:
   "Finish").
 - **Other panels** — the fuel meter (gauge), target laps (the fuel-targets
   row), tire values, and the ahead/behind relative-deltas panel.
+- **Auto pit fuel** — see [Auto pit fuel](#auto-pit-fuel) below.
+- **Units** — Liters or Gallons (US), applied to every fuel *volume* figure
+  on the overlay (rates, tank size, the Finish column's margin, fuel
+  targets). Display-only — everything server-side (`core/fuel.py`'s
+  tracking math, the SDK pit-fuel request) always stays in liters
+  regardless of this setting; `overlay.js`'s `toDisplayVolume()` converts
+  at render time (1 US gal = 3.785411784 L). Laps-based figures (Laps left,
+  Stint, Run out, Final pit) never change with this setting — they're
+  ratios of volume ÷ rate, and both sides convert the same way, so the lap
+  count comes out identical either unit.
 
 Changes save immediately (`POST /api/settings`, persisted to
 `%APPDATA%\PitStrategy\settings.json` so they survive restarts) and apply
@@ -446,6 +464,50 @@ Both windows open automatically on startup (see
 above); `POST /api/open-settings` reopens the settings window on demand if
 you close it mid-session, the same way `POST /api/open-overlay` already
 worked for the overlay.
+
+## Auto pit fuel
+
+Optionally sends iRacing's SDK pit-service fuel request (the same mechanism
+the in-car pit menu uses, via `irsdk`'s `pit_command(irsdk.PitCommandMode.fuel, ...)`
+— not a chat command) the moment `server/engine.py`'s `StrategyEngine`
+detects your car's `CarIdxOnPitRoad` flag go from off to on. **Off by
+default** — this actually submits a real request to the sim, not just a
+display feature, so it only fires if you turn it on in Settings and pick a
+source:
+
+- **Auto-add on pit entry** (checkbox, default off) — turns the feature
+  on/off, persisted the same way as every other setting
+  (`%APPDATA%\PitStrategy\settings.json`).
+- **Use** (dropdown) — which of the four "Fuel calculations (rows)" figures
+  (Last lap, Max fuel, 5-lap avg, Quali fuel) to size the request from.
+  Options are drawn live from whichever of those rows are currently checked
+  on above (`settings.js`'s `syncAutoFuelSourceOptions()`) — unchecking a
+  row removes it from the dropdown, and if it was the selected source, the
+  selection is cleared (and that clear is saved, not just displayed) so
+  auto-fuel never keeps quietly pointing at a hidden calculation.
+
+The amount requested isn't the rate itself — it's *fuel needed to finish
+the race at that rate, minus what's already in the tank* (the same math
+behind the "Finish" column, solved for "how much more to add" instead of
+"what's the margin"), clamped so it never asks for more than the tank can
+physically hold. Fires once per pit-road entry (edge-triggered, not held
+down), so leaving pit road and coming back around fires it again — freshly
+recomputed against however many laps are left at that point. If the
+selected source has no rate yet (e.g. "Quali fuel" picked before qualifying
+ends) or there's no leader-pace/tank-capacity data yet, it skips and logs
+why instead of sending a nonsense amount.
+
+You still need to actually drive into your pit stall for iRacing to apply
+the request — this just pre-fills the amount the moment you're on pit road,
+the same as if you'd set it on the in-car pit menu yourself. The overlay's
+footer shows a brief `Pit fuel: NL (source) sent` (or `FAILED`, if the SDK
+call raised) line after each request, driven by `last_fuel_command` in the
+websocket payload.
+
+`--demo` mode simulates the player's own car briefly reporting as on pit
+road every 12 laps (the same synthetic pit-stop cadence that already resets
+demo fuel/tires), so this is exercisable without a real iRacing session —
+see `core/irsdk_client.py`'s `DemoTelemetrySource._player_pit_road_until`.
 
 ## No more pit-window status bar
 

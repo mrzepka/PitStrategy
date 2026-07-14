@@ -164,3 +164,47 @@ def test_clear_fuel_limit_reverts_to_auto_detected():
     assert snap.tank_capacity == 65.0
     assert snap.max_fuel_l == 65.0
     assert snap.fuel_pct_available == 100.0
+
+
+def test_stint_start_fuel_level_is_none_with_no_data():
+    tracker = FuelTracker()
+    assert tracker.snapshot().stint_start_fuel_level is None
+
+
+def test_stint_start_fuel_level_captured_on_first_sample():
+    tracker = FuelTracker()
+    tracker.update(lap=0, fuel_level=60.0)
+    assert tracker.snapshot().stint_start_fuel_level == 60.0
+
+
+def test_stint_start_fuel_level_stays_fixed_through_a_stint():
+    tracker = FuelTracker()
+    tracker.update(lap=0, fuel_level=60.0)
+    tracker.update(lap=1, fuel_level=57.5)  # normal lap -- not a refuel
+    tracker.update(lap=2, fuel_level=55.0)  # normal lap -- not a refuel
+    snap = tracker.snapshot()
+    # Stays at the original 60.0 even though current_fuel_level has dropped.
+    assert snap.stint_start_fuel_level == 60.0
+    assert snap.current_fuel_level == 55.0
+
+
+def test_stint_start_fuel_level_updates_on_refuel():
+    tracker = FuelTracker()
+    tracker.update(lap=0, fuel_level=60.0)
+    tracker.update(lap=1, fuel_level=57.5)  # used 2.5
+    tracker.update(lap=2, fuel_level=57.5)  # used 2.5
+
+    tracker.update(lap=3, fuel_level=65.0)  # refueled -- new stint starts with 65.0
+    assert tracker.snapshot().stint_start_fuel_level == 65.0
+
+    tracker.update(lap=4, fuel_level=62.5)  # normal lap in the new stint
+    assert tracker.snapshot().stint_start_fuel_level == 65.0  # still fixed at the new value
+
+
+def test_stint_start_fuel_level_resets_on_reset():
+    tracker = FuelTracker()
+    tracker.update(lap=0, fuel_level=60.0)
+    assert tracker.snapshot().stint_start_fuel_level == 60.0
+
+    tracker.reset()
+    assert tracker.snapshot().stint_start_fuel_level is None
