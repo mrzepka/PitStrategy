@@ -113,28 +113,28 @@ body {
   margin-bottom: 2px;
 }
 
-/* Lit green when pitting now and filling to a full tank would be enough
-   fuel to finish the race at that row's rate -- i.e. this could be the
-   final stop. Always present (reserves its own space) so the label doesn't
-   shift when it turns on/off; transparent background is the "off" state
-   rather than display:none. */
+/* Red/green status light: red when pitting now and filling to a full tank
+   would NOT be enough fuel to finish the race at that row's rate, green
+   once it would be -- i.e. whether this could be the final stop. Lives as
+   its own rightmost grid column (the "Final pit" header in .rate-header),
+   not an inline decoration next to the row label anymore -- that made it
+   unclear what the dot even meant, with no label of its own. Solid red
+   (not a dim/muted "off" state) on purpose -- earlier versions (fully
+   transparent, then dim gray) both turned out too subtle to notice at a
+   glance; full-opacity red vs. green is a much bigger, unmissable
+   contrast. justify-self centers it under the "Final pit" header text within
+   its grid track. */
 .final-window-dot {
   display: inline-block;
-  width: 7px;
-  height: 7px;
-  margin-left: 3px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
-  /* Dim by default so the indicator itself is always visible (a fully
-     transparent "off" state was indistinguishable from the feature not
-     being there at all) -- lights up solid green in .open below. */
-  background: var(--muted);
-  opacity: 0.35;
-  vertical-align: middle;
+  background: var(--critical);
+  justify-self: center;
 }
 
 .final-window-dot.open {
   background: var(--good);
-  opacity: 1;
 }
 
 .stat-value {
@@ -145,15 +145,16 @@ body {
 
 .stat-value.small { font-size: 13px; color: var(--text-secondary); }
 
-/* Shared by .rate-header and .stat-row so the "Now"/"Stint"/"Finish"/"Run
-   out" numbers line up under their headers regardless of how wide the value
-   column's own content is -- 1fr for the value, then fixed columns for the
-   figures (Finish gets a touch more room for its pill background, Run out
-   a bit more still since it holds a "12-24"-style lap pair). */
+/* Shared by .rate-header and .stat-row so the "Laps left"/"Stint"/
+   "Finish"/"Run out"/"Final pit" figures line up under their headers
+   regardless of how wide the value column's own content is -- 1fr for the
+   value, then fixed columns for the figures (Finish gets a touch more room
+   for its pill background, Run out more still since it holds a "12-24"-
+   style lap pair, Final pit is narrow since it's just a centered dot). */
 .stat-row,
 .rate-header {
   display: grid;
-  grid-template-columns: 1fr 46px 46px 52px 54px;
+  grid-template-columns: 1fr 46px 46px 52px 54px 36px;
   column-gap: 4px;
   align-items: baseline;
 }
@@ -167,6 +168,7 @@ body {
 }
 
 .rate-header span:not(:first-child) { text-align: right; }
+.rate-header span:last-child { text-align: center; }
 
 .stat-laps-left {
   font-size: 14px;

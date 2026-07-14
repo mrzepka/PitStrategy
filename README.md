@@ -307,8 +307,8 @@ watch the overlay's **Quali fuel** row appear a few seconds after startup.
 
 The overlay's four fuel-rate boxes are **Last lap, Max fuel, 5-lap avg,
 Quali fuel** (in that order — Quali sits right beneath 5-lap avg, only
-shown once a baseline exists), each with four numbers next to it under a
-small **Laps left / Stint / Finish / Run out** header:
+shown once a baseline exists), each with five figures next to it under a
+small **Laps left / Stint / Finish / Run out / Final pit** header:
 
 - **Laps left** — `current fuel level ÷ that rate`: how many laps you'd get
   out of what's currently in the tank if you kept running at that pace.
@@ -323,6 +323,7 @@ small **Laps left / Stint / Finish / Run out** header:
   per-rate, client-side, so all four boxes get their own independent
   answer instead of one box speaking for all of them.
 - **Run out** — see [Run-out laps](#run-out-laps) below.
+- **Final pit** — see [Final-window indicator](#final-window-indicator) below.
 
 The "laps remaining" behind every Finish figure comes from the **race
 leader's** average lap time (`core/leader_pace.py`'s `LeaderPaceTracker`, a
@@ -381,17 +382,21 @@ entirely by the live fuel gauge's own numbers.
 
 ## Final-window indicator
 
-A small dot next to each fuel-rate row's label (Last lap, Max fuel, 5-lap
-avg, Quali fuel) is dim gray normally and lights up **solid green** when
-**pitting right now and filling to a full tank would be enough fuel to
-finish the race at that row's rate** — i.e. this could be your last stop.
-(It's always visibly there, just dim, rather than fully invisible when
-off — an earlier version used a fully transparent "off" state, which made
-it impossible to tell the indicator existed at all until the moment it
-happened to light up.) Answers a different question than the Finish
-column: Finish asks "would my *current* fuel get me to the end without
-stopping again," this asks "if I *do* stop once more, is a full tank
-enough to make it the final one."
+A 6th column, **Final pit** (rightmost, after Run out), holds a red/green dot
+for each fuel-rate row (Last lap, Max fuel, 5-lap avg, Quali fuel). It's
+**red** normally and flips to **solid green** when **pitting right now and
+filling to a full tank would be enough fuel to finish the race at that
+row's rate** — i.e. this could be your last stop. Both colors are
+full-opacity and the dot is 11px, specifically so it's unmissable at a
+glance -- two earlier versions (fully transparent when "off," then a dim
+35%-opacity gray) both turned out too subtle to actually notice while
+racing. It also used to be a plain dot with no label at all, appended
+directly after the row's name (e.g. "Last lap ●") -- promoted to a proper
+labeled column, matching every other per-rate figure on the HUD, once it
+became clear a bare unlabeled dot didn't communicate what it meant.
+Answers a different question than the Finish column: Finish asks "would my
+*current* fuel get me to the end without stopping again," this asks "if I
+*do* stop once more, is a full tank enough to make it the final one."
 
 Math (`overlay.js`'s `isFinalWindowOpen()`): `tank_capacity >=
 laps_remaining_leader_pace × rate`. Deliberately does **not** factor in
@@ -421,12 +426,12 @@ the overlay are shown, without editing any code:
 
 - **Fuel calculations (rows)** — Last lap, Max fuel, 5-lap avg, Quali fuel.
   Turn off whichever rates you don't look at.
-- **Fuel figures (columns)** — Laps left, Stint, Finish, Run out. Applies
+- **Fuel figures (columns)** — Laps left, Stint, Finish, Run out, and Final pit
+  (the [final-window indicator](#final-window-indicator) dots). Applies
   across all visible rows at once (e.g. hide "Run out" everywhere but keep
   "Finish").
 - **Other panels** — the fuel meter (gauge), target laps (the fuel-targets
-  row), tire values, the ahead/behind relative-deltas panel, and the
-  [final-window indicator](#final-window-indicator) dots.
+  row), tire values, and the ahead/behind relative-deltas panel.
 
 Changes save immediately (`POST /api/settings`, persisted to
 `%APPDATA%\PitStrategy\settings.json` so they survive restarts) and apply
@@ -456,7 +461,7 @@ removed entirely — `WINDOW_STATUS_TEXT`, `WINDOW_STATE_TO_HUD_BORDER`,
 `renderWindowStatusBar()`, and `setWindowState()` are all gone from
 `overlay.js`, along with `#window-status-bar` from `overlay.html` and its
 CSS. It had become redundant with the more precise per-rate info already on
-the HUD (Laps left/Stint/Finish/Run out say more than a single "too early /
+the HUD (Laps left/Stint/Finish/Run out/Final pit say more than a single "too early /
 open / overdue" label ever could) and the user found its own most
 memorable state — "TOO EARLY TO PIT" — actively annoying.
 `server/engine.py` still computes the same `strategy` field every tick
@@ -479,7 +484,7 @@ consumed by the frontend at all.
   "must pit by lap N" (`core/pit_planner.py`'s `compute_live_strategy()`);
   computed every tick but not currently shown on the overlay itself (see
   [No more pit-window status bar](#no-more-pit-window-status-bar) above) —
-  the Laps left/Stint/Finish/Run out columns are the HUD's actual live
+  the Laps left/Stint/Finish/Run out/Final pit columns are the HUD's actual live
   pit-window signal now.
 - **Relative (undercut/overcut panel)**: the 3 cars immediately ahead and
   behind you by race position, each showing their last lap time and the

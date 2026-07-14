@@ -42,7 +42,6 @@ const relativeAhead = document.getElementById("relative-ahead");
 const relativeBehind = document.getElementById("relative-behind");
 const rateHeader = document.querySelector(".rate-header");
 const statRows = document.querySelectorAll(".stat-row");
-const finalWindowDots = document.querySelectorAll(".final-window-dot");
 const hud = document.getElementById("hud");
 const resizeGrip = document.getElementById("resize-grip");
 
@@ -188,15 +187,19 @@ function initResizeGrip() {
 }
 
 // Column order matches the fixed markup order in every .rate-header/
-// .stat-row (label span, then these four) -- index i here is always that
+// .stat-row (label span, then these five) -- index i here is always that
 // element's child index minus 1. Widths mirror overlay.css's own
 // grid-template-columns so a hidden column collapses to zero width instead
-// of leaving a blank gap.
+// of leaving a blank gap. show_final_window drives the rightmost "Final pit"
+// column the same way every other column here works -- it used to be a
+// one-off inline dot next to the row label with its own separate
+// display-toggling logic, before it got promoted to a real column.
 const COLUMN_DEFS = [
   { key: "show_col_laps_left", width: "46px" },
   { key: "show_col_stint", width: "46px" },
   { key: "show_col_finish", width: "52px" },
   { key: "show_col_runout", width: "54px" },
+  { key: "show_final_window", width: "36px" },
 ];
 
 function applyColumnVisibility(settings) {
@@ -230,8 +233,6 @@ function applySettings(settings) {
   fuelGaugeCol.style.display = s.show_fuel_gauge === false ? "none" : "";
   fuelTargetRow.style.display = s.show_fuel_targets === false ? "none" : "";
   tireStats.style.display = s.show_tires === false ? "none" : "";
-  const showFinalWindow = s.show_final_window !== false;
-  finalWindowDots.forEach((dot) => { dot.style.display = showFinalWindow ? "" : "none"; });
   applyColumnVisibility(s);
   // Don't fight an in-progress drag (or the brief window while its new
   // value is still being persisted) with the older, not-yet-updated zoom
