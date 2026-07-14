@@ -4,12 +4,14 @@ const qualiFuelLaps = document.getElementById("quali-fuel-laps");
 const qualiFuelStint = document.getElementById("quali-fuel-stint");
 const qualiFuelFinish = document.getElementById("quali-fuel-finish");
 const qualiFuelRunout = document.getElementById("quali-fuel-runout");
+const qualiFuelFinalWindow = document.getElementById("quali-fuel-final-window");
 const lastLapBox = document.getElementById("last-lap-box");
 const lastLapFuel = document.getElementById("last-lap-fuel");
 const lastLapFuelLaps = document.getElementById("last-lap-fuel-laps");
 const lastLapFuelStint = document.getElementById("last-lap-fuel-stint");
 const lastLapFuelFinish = document.getElementById("last-lap-fuel-finish");
 const lastLapFuelRunout = document.getElementById("last-lap-fuel-runout");
+const lastLapFinalWindow = document.getElementById("last-lap-final-window");
 const maxFuelBox = document.getElementById("max-fuel-box");
 const avgFuelBox = document.getElementById("avg-fuel-box");
 const fuelPerLap = document.getElementById("fuel-per-lap");
@@ -17,11 +19,13 @@ const fuelPerLapLaps = document.getElementById("fuel-per-lap-laps");
 const fuelPerLapStint = document.getElementById("fuel-per-lap-stint");
 const fuelPerLapFinish = document.getElementById("fuel-per-lap-finish");
 const fuelPerLapRunout = document.getElementById("fuel-per-lap-runout");
+const fuelPerLapFinalWindow = document.getElementById("fuel-per-lap-final-window");
 const fuelMax = document.getElementById("fuel-max");
 const fuelMaxLaps = document.getElementById("fuel-max-laps");
 const fuelMaxStint = document.getElementById("fuel-max-stint");
 const fuelMaxFinish = document.getElementById("fuel-max-finish");
 const fuelMaxRunout = document.getElementById("fuel-max-runout");
+const fuelMaxFinalWindow = document.getElementById("fuel-max-final-window");
 const fuelCap = document.getElementById("fuel-cap");
 const fuelGaugeCol = document.getElementById("fuel-gauge-col");
 const fuelGaugeZones = document.getElementById("fuel-gauge-zones");
@@ -38,22 +42,57 @@ const relativeAhead = document.getElementById("relative-ahead");
 const relativeBehind = document.getElementById("relative-behind");
 const rateHeader = document.querySelector(".rate-header");
 const statRows = document.querySelectorAll(".stat-row");
+const finalWindowDots = document.querySelectorAll(".final-window-dot");
+const hud = document.getElementById("hud");
+const resizeGrip = document.getElementById("resize-grip");
 
 let lastFittedSize = null; // "widthxheight" of the last resize call, to skip redundant ones
 
-// Shrinks/grows the window to exactly fit the HUD's actual content (the
-// pit-window list, relative panel, etc. all change height as data arrives),
-// instead of guessing one fixed size up front. Prefers pywebview's own
-// resize API (window.pywebview.api.resize(), backed by
-// server/webview_launcher.py's _Api.resize() -> Window.resize()) since
-// that's the real overlay host now and a page-level window.resizeTo() call
-// isn't meaningful for a pywebview window the way it is for a browser tab.
-// Falls back to resizeTo() only for the case of opening this page directly
-// in a normal browser tab (e.g. while debugging).
+// User-controlled zoom level, set by dragging #resize-grip (see
+// initResizeGrip() below). #hud is frameless, so pywebview gives it no OS
+// resize border at all -- FormBorderStyle.None on Windows removes that
+// regardless of the `resizable` window option, which only matters for
+// non-frameless windows. This is why the grip and its own drag-tracking
+// exist instead of relying on native window-edge dragging.
+let currentScale = 1;
+const MIN_SCALE = 0.6;
+const MAX_SCALE = 2.0;
+
+// Most recent full settings object from the websocket, so a drag-resize can
+// POST back the *whole* settings payload (server/settings_store.py's
+// OverlaySettings model, not just zoom) without clobbering the other
+// row/column/panel toggles the settings window controls.
+let latestSettings = {};
+
+// True for the whole span from grip-mousedown through the resulting
+// POST /api/settings resolving (not just until mouseup) -- see
+// saveZoomSetting()'s comment for why the POST itself is included in this
+// window, not just the drag.
+let isResizingViaGrip = false;
+
+// Shrinks/grows the window to exactly fit the HUD's actual (scaled)
+// content (the relative panel, etc. all change height as data arrives, and
+// the user's chosen zoom level scales the whole thing), instead of
+// guessing one fixed size up front. Measures #hud's own offsetWidth/Height
+// specifically, NOT document.body.scrollWidth/Height -- verified live
+// against the real WebView2 engine that those two behave differently once
+// a transform is applied: an element's own offsetWidth/Height stay at its
+// pre-transform layout size (what we want as the "natural" baseline to
+// scale from), but scrollWidth/Height on an ancestor (body) already bakes
+// in descendants' transformed/visual size -- multiplying that by
+// currentScale again would double-apply the scale. #hud is the element
+// applyScale() actually transforms, so its offsetWidth/Height are the
+// correct natural-size source of truth. Prefers pywebview's own resize API
+// (window.pywebview.api.resize(), backed by server/webview_launcher.py's
+// _Api.resize() -> Window.resize()) since that's the real overlay host now
+// and a page-level window.resizeTo() call isn't meaningful for a pywebview
+// window the way it is for a browser tab. Falls back to resizeTo() only
+// for the case of opening this page directly in a normal browser tab (e.g.
+// while debugging).
 function fitWindowToContent() {
   try {
-    const contentWidth = document.body.scrollWidth;
-    const contentHeight = document.body.scrollHeight;
+    const contentWidth = Math.round(hud.offsetWidth * currentScale);
+    const contentHeight = Math.round(hud.offsetHeight * currentScale);
 
     if (window.pywebview && window.pywebview.api && window.pywebview.api.resize) {
       const key = `pywebview:${contentWidth}x${contentHeight}`;
@@ -76,6 +115,76 @@ function fitWindowToContent() {
   } catch (err) {
     // Best-effort only -- never let a resize failure break rendering.
   }
+}
+
+function applyScale(scale) {
+  currentScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
+  hud.style.transform = `scale(${currentScale})`;
+}
+
+// Persists the just-dragged zoom to settings.json (via the whole
+// OverlaySettings payload, merged with whatever else was last known, so
+// this doesn't clobber the row/column/panel toggles) -- so the zoom
+// survives to the next launch instead of always resetting to 100%.
+// isResizingViaGrip stays true until this resolves (not just until
+// mouseup), so an in-flight websocket frame carrying the *old*
+// (pre-drag) zoom can't sneak in and snap the display back for a tick
+// before the new value round-trips back from the server.
+function saveZoomSetting(zoom) {
+  fetch("/api/settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...latestSettings, zoom }),
+  })
+    .catch(() => {
+      // Best-effort -- if this fails, the zoom still applies locally for
+      // the rest of this session, it just won't survive a restart.
+    })
+    .finally(() => {
+      isResizingViaGrip = false;
+    });
+}
+
+// Drag-to-resize via a custom corner grip, since frameless windows have no
+// OS-native one (see currentScale's comment above). Scales the whole HUD
+// uniformly rather than reflowing -- this is a fixed-composition card, not
+// a resizable list, so non-uniform width/height stretching would just
+// distort it; only horizontal drag distance drives the new scale.
+function initResizeGrip() {
+  let dragging = false;
+  let startScreenX = 0;
+  let startScale = 1;
+  let naturalWidth = 0;
+
+  function onDragMove(event) {
+    if (!dragging || !naturalWidth) return;
+    const dx = event.screenX - startScreenX;
+    applyScale(startScale + dx / naturalWidth);
+    fitWindowToContent();
+  }
+
+  function onDragEnd() {
+    dragging = false;
+    window.removeEventListener("mousemove", onDragMove);
+    window.removeEventListener("mouseup", onDragEnd);
+    saveZoomSetting(currentScale);
+  }
+
+  resizeGrip.addEventListener("mousedown", (event) => {
+    // Stops pywebview's easy_drag (a window-level mousedown listener that
+    // treats any click-drag on the page as a window *move*) from firing
+    // for this event -- without this, grabbing the grip would drag the
+    // whole window around instead of resizing it.
+    event.stopPropagation();
+    event.preventDefault();
+    dragging = true;
+    isResizingViaGrip = true;
+    startScreenX = event.screenX;
+    startScale = currentScale;
+    naturalWidth = hud.offsetWidth; // #hud's own offsetWidth is scale-invariant, unlike body.scrollWidth
+    window.addEventListener("mousemove", onDragMove);
+    window.addEventListener("mouseup", onDragEnd);
+  });
 }
 
 // Column order matches the fixed markup order in every .rate-header/
@@ -114,13 +223,22 @@ function applyColumnVisibility(settings) {
 // since hidden-by-choice panels should stay hidden either way.
 function applySettings(settings) {
   const s = settings || {};
+  latestSettings = s;
   lastLapBox.style.display = s.show_last_lap === false ? "none" : "";
   maxFuelBox.style.display = s.show_max_fuel === false ? "none" : "";
   avgFuelBox.style.display = s.show_avg_fuel === false ? "none" : "";
   fuelGaugeCol.style.display = s.show_fuel_gauge === false ? "none" : "";
   fuelTargetRow.style.display = s.show_fuel_targets === false ? "none" : "";
   tireStats.style.display = s.show_tires === false ? "none" : "";
+  const showFinalWindow = s.show_final_window !== false;
+  finalWindowDots.forEach((dot) => { dot.style.display = showFinalWindow ? "" : "none"; });
   applyColumnVisibility(s);
+  // Don't fight an in-progress drag (or the brief window while its new
+  // value is still being persisted) with the older, not-yet-updated zoom
+  // this frame is carrying -- see saveZoomSetting()'s comment.
+  if (!isResizingViaGrip) {
+    applyScale(typeof s.zoom === "number" ? s.zoom : 1);
+  }
 }
 
 function fmt(value, digits = 1, suffix = "") {
@@ -170,6 +288,27 @@ function applyFinishMargin(el, ratePerLap, currentFuelLevel, lapsRemainingLeader
   const sign = margin >= 0 ? "+" : "";
   el.textContent = `${sign}${margin.toFixed(1)}`;
   el.classList.add(margin >= 0 ? "finish-ok" : "finish-critical");
+}
+
+// "If I pit right now and fill to a full tank, would that tank be enough to
+// cover the rest of the race at this rate" -- i.e. could this be the final
+// stop. tankCapacity is already the effective (post fuel-limit-override)
+// capacity from FuelTracker.snapshot(), same field every other column here
+// uses. Deliberately doesn't factor in currentFuelLevel: at a stop you can
+// always fill up to tankCapacity regardless of what's currently in the
+// tank, so the ceiling on "how much fuel could be in the car after this
+// stop" is tankCapacity itself, not tankCapacity plus whatever's left now --
+// current fuel level only affects how much you'd need to *add*, not
+// whether a stop can physically carry enough to finish.
+function isFinalWindowOpen(ratePerLap, tankCapacity, lapsRemainingLeaderPace) {
+  if (!ratePerLap || ratePerLap <= 0 || !tankCapacity || tankCapacity <= 0 || !lapsRemainingLeaderPace) {
+    return false;
+  }
+  return tankCapacity >= lapsRemainingLeaderPace * ratePerLap;
+}
+
+function applyFinalWindow(el, ratePerLap, tankCapacity, lapsRemainingLeaderPace) {
+  el.classList.toggle("open", isFinalWindowOpen(ratePerLap, tankCapacity, lapsRemainingLeaderPace));
 }
 
 function fmtDelta(delta) {
@@ -298,6 +437,7 @@ function render(data) {
     qualiFuelFinish.textContent = "–";
     qualiFuelFinish.classList.remove("finish-ok", "finish-critical");
     qualiFuelRunout.textContent = "–";
+    qualiFuelFinalWindow.classList.remove("open");
     qualiFuelBox.style.display = "none";
     lastLapFuel.textContent = "–";
     lastLapFuelLaps.textContent = "–";
@@ -305,18 +445,21 @@ function render(data) {
     lastLapFuelFinish.textContent = "–";
     lastLapFuelFinish.classList.remove("finish-ok", "finish-critical");
     lastLapFuelRunout.textContent = "–";
+    lastLapFinalWindow.classList.remove("open");
     fuelPerLap.textContent = "–";
     fuelPerLapLaps.textContent = "–";
     fuelPerLapStint.textContent = "–";
     fuelPerLapFinish.textContent = "–";
     fuelPerLapFinish.classList.remove("finish-ok", "finish-critical");
     fuelPerLapRunout.textContent = "–";
+    fuelPerLapFinalWindow.classList.remove("open");
     fuelMax.textContent = "–";
     fuelMaxLaps.textContent = "–";
     fuelMaxStint.textContent = "–";
     fuelMaxFinish.textContent = "–";
     fuelMaxFinish.classList.remove("finish-ok", "finish-critical");
     fuelMaxRunout.textContent = "–";
+    fuelMaxFinalWindow.classList.remove("open");
     fuelCap.textContent = "–";
     fuelTargetRow.innerHTML = "";
     renderFuelGauge({});
@@ -342,11 +485,13 @@ function render(data) {
   fuelPerLapStint.textContent = stintLengthText(fuel.avg_fuel_per_lap, tankCapacity);
   applyFinishMargin(fuelPerLapFinish, fuel.avg_fuel_per_lap, currentFuelLevel, lapsRemainingLeaderPace);
   applyRunout(fuelPerLapRunout, fuel.avg_fuel_per_lap, currentLap, currentFuelLevel, tankCapacity);
+  applyFinalWindow(fuelPerLapFinalWindow, fuel.avg_fuel_per_lap, tankCapacity, lapsRemainingLeaderPace);
   fuelMax.textContent = fmt(fuel.max_fuel_per_lap, 2, " L/lap");
   fuelMaxLaps.textContent = lapsLeftText(fuel.max_fuel_per_lap, currentFuelLevel);
   fuelMaxStint.textContent = stintLengthText(fuel.max_fuel_per_lap, tankCapacity);
   applyFinishMargin(fuelMaxFinish, fuel.max_fuel_per_lap, currentFuelLevel, lapsRemainingLeaderPace);
   applyRunout(fuelMaxRunout, fuel.max_fuel_per_lap, currentLap, currentFuelLevel, tankCapacity);
+  applyFinalWindow(fuelMaxFinalWindow, fuel.max_fuel_per_lap, tankCapacity, lapsRemainingLeaderPace);
   fuelCap.textContent = fuel.tank_capacity !== null && fuel.tank_capacity !== undefined
     ? fmt(fuel.tank_capacity, 1, " L") + (fuel.fuel_pct_available && fuel.fuel_pct_available !== 100 ? ` (×${fuel.fuel_pct_available}%)` : "")
     : "–";
@@ -362,6 +507,7 @@ function render(data) {
     qualiFuelStint.textContent = stintLengthText(qualiBaseline.fuel_per_lap, tankCapacity);
     applyFinishMargin(qualiFuelFinish, qualiBaseline.fuel_per_lap, currentFuelLevel, lapsRemainingLeaderPace);
     applyRunout(qualiFuelRunout, qualiBaseline.fuel_per_lap, currentLap, currentFuelLevel, tankCapacity);
+    applyFinalWindow(qualiFuelFinalWindow, qualiBaseline.fuel_per_lap, tankCapacity, lapsRemainingLeaderPace);
   }
 
   lastLapFuel.textContent = fmt(fuel.last_lap_fuel_per_lap, 2, " L/lap");
@@ -369,6 +515,7 @@ function render(data) {
   lastLapFuelStint.textContent = stintLengthText(fuel.last_lap_fuel_per_lap, tankCapacity);
   applyFinishMargin(lastLapFuelFinish, fuel.last_lap_fuel_per_lap, currentFuelLevel, lapsRemainingLeaderPace);
   applyRunout(lastLapFuelRunout, fuel.last_lap_fuel_per_lap, currentLap, currentFuelLevel, tankCapacity);
+  applyFinalWindow(lastLapFinalWindow, fuel.last_lap_fuel_per_lap, tankCapacity, lapsRemainingLeaderPace);
 
   const tires = data.tires || {};
   tireWorst.textContent = tires.worst_wear_remaining !== null && tires.worst_wear_remaining !== undefined
@@ -405,4 +552,5 @@ function connect() {
   ws.onerror = () => ws.close();
 }
 
+initResizeGrip();
 connect();

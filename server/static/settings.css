@@ -63,6 +63,20 @@ input[type="checkbox"] {
   cursor: pointer;
 }
 
+.zoom-label {
+  cursor: default;
+}
+
+input[type="number"] {
+  width: 56px;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 6px;
+}
+
 #save-status {
   font-size: 11px;
   color: var(--muted);

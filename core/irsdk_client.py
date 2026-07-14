@@ -9,8 +9,10 @@ can be exercised without iRacing running -- pyirsdk's test_file replay mode
 is only a static single-tick snapshot, not useful for that.
 """
 import random
+import sys
 import threading
 import time
+import traceback
 from dataclasses import dataclass, field
 
 from core.tires import TEMP_CHANNELS, WEAR_CHANNELS
@@ -88,7 +90,13 @@ class IRSDKTelemetrySource:
         while not self._stop_event.is_set():
             try:
                 self._poll()
-            except Exception:
+            except Exception as exc:  # noqa: BLE001 - never let a bad poll kill the loop
+                # Printed so a real cause (e.g. a wrong SDK channel name)
+                # shows up somewhere instead of just "disconnected" with no
+                # trail -- the packaged exe deliberately keeps a visible
+                # console specifically so this kind of thing is diagnosable.
+                print(f"[PitStrategy] telemetry poll error: {exc}", file=sys.stderr)
+                traceback.print_exc()
                 with self._lock:
                     self._state.connected = False
             time.sleep(self._poll_interval)

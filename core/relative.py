@@ -20,6 +20,13 @@ class RelativeTracker:
     def __init__(self):
         self._has_pitted: dict[int, bool] = {}
 
+    def reset(self) -> None:
+        """Clears sticky pit-stop status. Call this on a session transition
+        (e.g. qualifying -> race) -- has_pitted is deliberately sticky
+        *within* a session, but a stop made in a session that just ended
+        shouldn't still show as a `PIT` tag once the next session starts."""
+        self._has_pitted.clear()
+
     def update_pit_status(self, car_idx_on_pit_road: list[bool]) -> None:
         for idx, on_pit_road in enumerate(car_idx_on_pit_road):
             if on_pit_road:

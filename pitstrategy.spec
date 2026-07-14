@@ -1,17 +1,19 @@
 # Build with: pyinstaller pitstrategy.spec
 # Produces dist/PitStrategy/PitStrategy.exe (onedir -- see notes below).
 #
-# Two entry points share this one process: run.py starts the FastAPI/uvicorn
-# server on the main thread, which in turn spawns server/webview_launcher.py
-# as *subprocesses* for the overlay/settings windows (see server/browser.py's
-# docstring for why -- pywebview's event loop needs to own a process's main
-# thread, and this process's main thread is already committed to
-# uvicorn.run()). Those subprocesses re-invoke this same frozen exe with
-# `-m server.webview_launcher <role> <url>`-equivalent args (see
-# server/browser.py's _launch()), which is why server/__main__.py exists --
-# a frozen exe has no real "python -m" to fall back on, so
-# `PitStrategy.exe -m server.webview_launcher overlay <url>` is handled by
-# __main__.py's shim instead of Python's normal module-execution machinery.
+# run.py starts the FastAPI/uvicorn server on the main thread, which in turn
+# spawns server/webview_launcher.py as *subprocesses* for the overlay/
+# settings windows (see server/browser.py's docstring for why -- pywebview's
+# event loop needs to own a process's main thread, and this process's main
+# thread is already committed to uvicorn.run()). Running from source, those
+# subprocesses are `python -m server.webview_launcher <role> <url>`. A
+# frozen exe has no real "python -m" to fall back on (sys.executable there
+# is PitStrategy.exe itself, not a Python interpreter), so
+# server/browser.py detects sys.frozen and instead reruns this *same* exe
+# with `--webview-window <role> <url>`, which run.py's main() intercepts
+# before any normal server-startup argument parsing and dispatches straight
+# to server.webview_launcher.main() -- see run.py's own module docstring
+# for the full version of this.
 #
 # Onedir (COLLECT), not onefile: onefile self-extracts to a fresh temp
 # directory on every launch, which is slower and has been flaky in the past

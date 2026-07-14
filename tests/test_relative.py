@@ -85,6 +85,22 @@ def test_has_pitted_is_sticky():
     assert result["behind"][0].has_pitted is False  # car_idx 2, never pitted
 
 
+def test_reset_clears_sticky_pit_status():
+    # A session transition (e.g. qualifying -> race) should clear a stop
+    # made in the session that just ended -- has_pitted is only sticky
+    # *within* a session, not across one.
+    tracker = RelativeTracker()
+    tracker.update_pit_status([False, True, False])
+    tracker.reset()
+
+    positions = [2, 1, 3]
+    result = tracker.nearby_cars(
+        player_car_idx=0, car_idx_position=positions, car_idx_last_lap_time=[0.0] * 3,
+        car_numbers={}, my_last_lap_time=None,
+    )
+    assert result["ahead"][0].has_pitted is False  # car_idx 1, cleared by reset()
+
+
 def test_no_position_data_returns_empty():
     tracker = RelativeTracker()
     result = tracker.nearby_cars(

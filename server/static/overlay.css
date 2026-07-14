@@ -39,8 +39,37 @@ body {
      tune transparency in WINDOW_ALPHA, tune legibility here if needed. */
   background: var(--surface-1);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 0;
   padding: 10px 12px;
+  position: relative; /* anchors #resize-grip */
+  /* Scaling (overlay.js's applyScale(), from dragging #resize-grip) grows
+     from the top-left corner -- matches server/webview_launcher.py's
+     _Api.resize() -> Window.resize()'s default FixPoint.NORTH|WEST, so the
+     window's top-left position never moves during a resize, only its
+     bottom-right edge does. */
+  transform-origin: top left;
+}
+
+#resize-grip {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+  /* Three diagonal notches, bottom-right-heavy -- the universal "drag to
+     resize" corner glyph, drawn as a gradient rather than an image/font
+     icon so no extra asset is needed. */
+  background: linear-gradient(135deg,
+    transparent 0%, transparent 40%, var(--muted) 40%, var(--muted) 46%,
+    transparent 46%, transparent 60%, var(--muted) 60%, var(--muted) 66%,
+    transparent 66%, transparent 80%, var(--muted) 80%, var(--muted) 86%,
+    transparent 86%);
+  opacity: 0.5;
+}
+
+#resize-grip:hover {
+  opacity: 1;
 }
 
 .col-label {
@@ -82,6 +111,25 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin-bottom: 2px;
+}
+
+/* Lit green when pitting now and filling to a full tank would be enough
+   fuel to finish the race at that row's rate -- i.e. this could be the
+   final stop. Always present (reserves its own space) so the label doesn't
+   shift when it turns on/off; transparent background is the "off" state
+   rather than display:none. */
+.final-window-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-left: 3px;
+  border-radius: 50%;
+  background: transparent;
+  vertical-align: middle;
+}
+
+.final-window-dot.open {
+  background: var(--good);
 }
 
 .stat-value {

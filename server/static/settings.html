@@ -31,6 +31,16 @@
     <label><input type="checkbox" id="show_fuel_targets" /> Target laps</label>
     <label><input type="checkbox" id="show_tires" /> Tire values</label>
     <label><input type="checkbox" id="show_relative" /> Ahead/behind deltas</label>
+    <label><input type="checkbox" id="show_final_window" /> Final-window indicator</label>
+  </section>
+
+  <section>
+    <h2>Overlay zoom</h2>
+    <label class="zoom-label">
+      Zoom
+      <input type="number" id="zoom_pct" min="60" max="200" step="5" /> %
+    </label>
+    <p class="hint">Also settable by dragging the overlay's bottom-right corner.</p>
   </section>
 
   <p id="save-status"></p>

@@ -2,8 +2,10 @@
 calculation, producing one JSON-serializable snapshot dict per tick for the
 websocket to broadcast.
 """
+import sys
 import threading
 import time
+import traceback
 from dataclasses import asdict
 from typing import Protocol
 
@@ -82,6 +84,13 @@ class StrategyEngine:
             try:
                 self._tick()
             except Exception as exc:  # noqa: BLE001 - never let a bad tick kill the loop
+                # Printed (not just stored) so the packaged exe's
+                # deliberately-visible console actually shows *why* the
+                # overlay went to "disconnected" instead of leaving that as
+                # a silent dead end -- overlay.js doesn't currently surface
+                # data.error anywhere either.
+                print(f"[PitStrategy] tick error: {exc}", file=sys.stderr)
+                traceback.print_exc()
                 with self._lock:
                     self._latest = {"connected": False, "error": str(exc)}
             time.sleep(self._interval)
@@ -137,6 +146,7 @@ class StrategyEngine:
                         )
             self._fuel.reset()
             self._tires.reset()
+            self._relative.reset()
             self._last_lap = None
             self._last_lap_time = None
             self._lap_time_samples = []

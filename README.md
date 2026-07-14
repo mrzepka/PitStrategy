@@ -6,6 +6,49 @@ current pace lap-to-lap (fuel rates, laps-remaining projections, tire wear) —
 there's no pre-race stint planner wired into the running app right now (see
 [No more pre-race planner](#no-more-pre-race-planner) below).
 
+## TL;DR
+
+**Get it running:**
+
+1. On the GitHub page, click **Code → Download ZIP** (or `git clone` the
+   repo if you have git), then extract it somewhere.
+2. The built `.exe` is **not** included in the download — `dist/`/`build/`
+   are gitignored (generated output, not source). Build it yourself, once,
+   from a terminal in the extracted folder:
+   ```
+   pip install -r requirements.txt -r requirements-build.txt
+   pyinstaller pitstrategy.spec --noconfirm
+   ```
+   (Needs Python 3.11+ installed and on `PATH`. This takes a minute or so
+   and only needs redoing if you pull newer source later.)
+3. Open `dist\PitStrategy\` and double-click **`PitStrategy.exe`**. A
+   console window opens (deliberate, see
+   [Building a standalone executable](#building-a-standalone-executable)),
+   then the overlay and settings windows appear a couple seconds later.
+
+**Use it:**
+
+- It connects to whatever iRacing session is already running — no setup
+  needed. (Want to try it without iRacing open first? Run
+  `PitStrategy.exe --demo` from a terminal instead of double-clicking.)
+- Drag the overlay (click anywhere on it) to a corner that doesn't cover
+  iRacing's own HUD — it's frameless and always-on-top. Run iRacing in
+  **borderless windowed** mode, or put the overlay on a second monitor,
+  since there's no click-through.
+- Too big or small? Drag the small corner glyph at the overlay's
+  bottom-right to zoom it — see
+  [Resizing the overlay](#resizing-the-overlay). Your zoom level is
+  remembered next time.
+- Use the **Settings** window (opens alongside the overlay) to hide
+  whichever rows/columns/panels you don't want cluttering the HUD — see
+  [Settings](#settings). Changes apply live, no restart needed.
+- To close everything: close the overlay window, then close the console
+  window (or Ctrl+C in it). They're independent processes on purpose, so
+  closing one doesn't kill the others mid-session — see
+  [Using the overlay during a race](#using-the-overlay-during-a-race).
+
+Everything below goes into more depth on all of this.
+
 ## Setup
 
 ```
@@ -142,7 +185,9 @@ others. This goes through pywebview's own resize mechanism (a small
 before switching to pywebview, since `resizeTo()` isn't meaningful for a
 pywebview-hosted window the way it is for a real browser tab. Falls back to
 `resizeTo()` only if `window.pywebview` isn't present at all (e.g. opening
-`overlay.html` directly in a normal browser tab for debugging).
+`overlay.html` directly in a normal browser tab for debugging). You can
+also manually zoom the whole HUD bigger/smaller by dragging its corner --
+see [Resizing the overlay](#resizing-the-overlay) below.
 
 If you ever see `[pywebview] Error while processing
 window.native.AccessibilityObject...` (or `...DataBindings.Control...`)
@@ -171,6 +216,51 @@ targets that. The practical setup for using it during a race:
    (like PowerToys) is needed for that part anymore.
 
 It reconnects automatically if iRacing (or the server) restarts mid-session.
+
+## Resizing the overlay
+
+Drag the small corner glyph at the bottom-right of the HUD (`#resize-grip`)
+to zoom the whole overlay up or down — text, gauges, spacing, all of it,
+uniformly. Frameless windows get **no OS-native resize border at all**
+(confirmed against pywebview's actual Windows backend: `FormBorderStyle` is
+forced to `None` whenever a window is frameless, regardless of the
+`resizable` option, which only affects non-frameless windows), so this grip
+and its own drag-tracking exist specifically to work around that.
+
+Mechanically: dragging applies a CSS `transform: scale()` to `#hud`
+(`overlay.js`'s `applyScale()`), anchored `transform-origin: top left` so
+the window's top-left position never moves during a resize -- only the
+bottom-right edge does, matching `Window.resize()`'s default resize anchor
+(`FixPoint.NORTH | FixPoint.WEST`). The grip's own `mousedown` handler calls
+`event.stopPropagation()` so pywebview's `easy_drag` (which treats any
+click-drag anywhere on the page as a window *move*) doesn't also fire for
+the same click -- without that, grabbing the grip would drag the window
+around instead of resizing it.
+
+The zoom factor is clamped to 60%-200% (`MIN_SCALE`/`MAX_SCALE` in
+`overlay.js`) and lives only in memory for the current window -- it resets
+to 100% on the next launch, it isn't saved to
+[Settings](#settings)/`settings.json`. `fitWindowToContent()` (the
+existing logic that auto-resizes the window to fit whatever's currently
+shown) was made scale-aware so it cooperates with a manual zoom rather than
+fighting it: it multiplies `#hud`'s own natural (unscaled) size by the
+current zoom before asking pywebview to resize the window, every tick, so
+toggling a setting or the HUD's content changing height still resizes the
+window correctly *at whatever zoom level you've chosen*, instead of
+snapping back to 100%.
+
+One non-obvious pitfall this hit during development, worth flagging in
+case it comes up again: `document.body.scrollWidth` (used everywhere else
+for measuring "how big does the window need to be") is **not**
+scale-invariant -- once a `transform: scale()` is applied anywhere in the
+page, `body.scrollWidth` starts reflecting the *visually transformed* size
+of its descendants, not their pre-transform layout size (confirmed live
+against the real WebView2 engine: at `scale(1.3)` on a 400px-wide HUD,
+`body.scrollWidth` read `520`, not `400`). Multiplying that by the current
+scale again would silently double-apply it. `#hud.offsetWidth`/`offsetHeight`
+(an element's own layout size, which transforms never affect) don't have
+this problem, which is why `fitWindowToContent()` and the drag handler both
+measure `#hud` directly rather than `document.body`.
 
 ## Qualifying baseline (feeds the overlay's Quali fuel row)
 
@@ -270,6 +360,36 @@ then added back the same day once it turned out to still be used —
 unlike the planner, it has no dependency on an active plan; it's driven
 entirely by the live fuel gauge's own numbers.
 
+## Final-window indicator
+
+A small dot next to each fuel-rate row's label (Last lap, Max fuel, 5-lap
+avg, Quali fuel) lights up green when **pitting right now and filling to a
+full tank would be enough fuel to finish the race at that row's rate** —
+i.e. this could be your last stop. Answers a different question than the
+Finish column: Finish asks "would my *current* fuel get me to the end
+without stopping again," this asks "if I *do* stop once more, is a full
+tank enough to make it the final one."
+
+Math (`overlay.js`'s `isFinalWindowOpen()`): `tank_capacity >=
+laps_remaining_leader_pace × rate`. Deliberately does **not** factor in
+`current_fuel_level` — at a stop you can always fill to `tank_capacity`
+regardless of what's currently in the tank, so the ceiling on how much fuel
+the car could carry after that stop is `tank_capacity` itself, not
+`tank_capacity` plus whatever's left now. `current_fuel_level` would only
+matter for computing how much to *add*, which this indicator doesn't show
+(it's a yes/no light, not an amount). Both `tank_capacity` and
+`current_fuel_level` are the same already-verified fields (`FuelTracker`'s
+effective, post-fuel-limit-override capacity and the live `FuelLevel`
+reading) every other column on this HUD already uses — no new backend
+calculation needed for this feature. `laps_remaining_leader_pace` is the
+same leader-pace-based estimate the Finish column uses (see
+[Qualifying baseline](#qualifying-baseline-feeds-the-overlays-quali-fuel-row)
+above for why leader pace, not your own).
+
+Toggled by the **Final-window indicator** checkbox in
+[Settings](#settings) (on by default) — turning it off hides all four dots
+at once, it's not per-row.
+
 ## Settings
 
 A second window (`http://127.0.0.1:8734/settings`, normal windowed chrome —
@@ -282,7 +402,8 @@ the overlay are shown, without editing any code:
   across all visible rows at once (e.g. hide "Run out" everywhere but keep
   "Finish").
 - **Other panels** — the fuel meter (gauge), target laps (the fuel-targets
-  row), tire values, and the ahead/behind relative-deltas panel.
+  row), tire values, the ahead/behind relative-deltas panel, and the
+  [final-window indicator](#final-window-indicator) dots.
 
 Changes save immediately (`POST /api/settings`, persisted to
 `%APPDATA%\PitStrategy\settings.json` so they survive restarts) and apply

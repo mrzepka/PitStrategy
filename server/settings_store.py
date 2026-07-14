@@ -6,7 +6,7 @@ where the working directory isn't something the user controls.
 import os
 from pathlib import Path
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 def _settings_path() -> Path:
@@ -31,6 +31,11 @@ class OverlaySettings(BaseModel):
     show_fuel_targets: bool = True
     show_tires: bool = True
     show_relative: bool = True
+    show_final_window: bool = True
+    # Overlay zoom, set by dragging overlay.js's #resize-grip. Bounds match
+    # overlay.js's MIN_SCALE/MAX_SCALE -- kept in sync by hand since this is
+    # the only place outside JS that needs to know them.
+    zoom: float = Field(default=1.0, ge=0.6, le=2.0)
 
 
 def load_settings() -> OverlaySettings:

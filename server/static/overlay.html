@@ -17,7 +17,7 @@
           <span title="Next two laps you'd run dry at this rate, refueling to full each time">Run out</span>
         </div>
         <div class="info-box" id="last-lap-box">
-          <div class="stat-label">Last lap</div>
+          <div class="stat-label">Last lap <span class="final-window-dot" id="last-lap-final-window" title="Green = pitting now and filling to a full tank would be enough to finish the race at this rate"></span></div>
           <div class="stat-row">
             <span class="stat-value small" id="last-lap-fuel">–</span>
             <span class="stat-laps-left" id="last-lap-fuel-laps">–</span>
@@ -27,7 +27,7 @@
           </div>
         </div>
         <div class="info-box" id="max-fuel-box">
-          <div class="stat-label">Max fuel</div>
+          <div class="stat-label">Max fuel <span class="final-window-dot" id="fuel-max-final-window" title="Green = pitting now and filling to a full tank would be enough to finish the race at this rate"></span></div>
           <div class="stat-row">
             <span class="stat-value small" id="fuel-max">–</span>
             <span class="stat-laps-left" id="fuel-max-laps">–</span>
@@ -37,7 +37,7 @@
           </div>
         </div>
         <div class="info-box" id="avg-fuel-box">
-          <div class="stat-label">5-lap avg</div>
+          <div class="stat-label">5-lap avg <span class="final-window-dot" id="fuel-per-lap-final-window" title="Green = pitting now and filling to a full tank would be enough to finish the race at this rate"></span></div>
           <div class="stat-row">
             <span class="stat-value small" id="fuel-per-lap">–</span>
             <span class="stat-laps-left" id="fuel-per-lap-laps">–</span>
@@ -47,7 +47,7 @@
           </div>
         </div>
         <div class="info-box" id="quali-fuel-box">
-          <div class="stat-label">Quali fuel</div>
+          <div class="stat-label">Quali fuel <span class="final-window-dot" id="quali-fuel-final-window" title="Green = pitting now and filling to a full tank would be enough to finish the race at this rate"></span></div>
           <div class="stat-row">
             <span class="stat-value small" id="quali-fuel">–</span>
             <span class="stat-laps-left" id="quali-fuel-laps">–</span>
@@ -98,6 +98,8 @@
       <span id="lap-num">Lap –</span>
       <span>PitStrategy</span>
     </div>
+
+    <div id="resize-grip" title="Drag to resize"></div>
   </div>
   <script src="/static/overlay.js"></script>
 </body>
