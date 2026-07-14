@@ -528,9 +528,15 @@ consumed by the frontend at all.
 
 - **Fuel**: rolling average liters/lap (last 5 laps, refuels are detected
   and excluded from the average), laps remaining on current fuel.
-- **Tires**: which corner/tread (e.g. `RR-L`) is wearing worst, its wear
-  remaining, and its last carcass temperature reading — shown instead of a
-  "laps remaining on tires" estimate, since that rolling-average number is
+- **Tires**: which corner/tread (e.g. `RR-I`) is wearing worst, its wear
+  remaining, and its last carcass temperature reading. The tread suffix is
+  inboard/middle/outboard (`I`/`M`/`O`) relative to the car's centerline, not
+  iRacing's raw left/middle/right SDK channel naming — the SDK's own L/R
+  naming is fixed per channel regardless of which side of the car it's on,
+  so the same "R" channel means the *outboard* edge on a right-side corner
+  (RF/RR) but the *inboard* edge on a left-side corner (LF/LR).
+  `core/tires.py`'s `_tread_side_label()` does that translation. Shown
+  instead of a "laps remaining on tires" estimate, since that rolling-average number is
   noisy until you've completed at least one real stint (it settles down
   after your first pit stop, once wear has been tracked over consecutive
   green-flag laps without a tire change in the middle). The live pit-window

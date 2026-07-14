@@ -250,6 +250,24 @@ body {
   text-align: center;
 }
 
+/* Small solid-green pill under the gauge, shown only while auto pit fuel is
+   turned on in Settings -- display is toggled entirely in JS
+   (applySettings()) from settings.auto_fuel_enabled, not CSS state, so
+   there's nothing to show at all when it's off (not a dim/empty slot). */
+.auto-fuel-badge {
+  display: none;
+  margin-top: 4px;
+  width: 22px;
+  height: 16px;
+  line-height: 16px;
+  border-radius: 3px;
+  background: var(--good);
+  color: #0b0b0b;
+  font-size: 9px;
+  font-weight: 700;
+  text-align: center;
+}
+
 #fuel-target-row {
   margin-top: 8px;
   padding-top: 6px;

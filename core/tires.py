@@ -28,6 +28,20 @@ def _temp_channel(corner: str, tread: str) -> str:
     return f"{corner}tempC{tread}"
 
 
+def _tread_side_label(corner: str, tread: str) -> str:
+    """Translates the SDK's own L/M/R tread naming (fixed regardless of
+    which corner it's on) into inside/middle/outside relative to the car's
+    centerline, which is what's actually meaningful to a driver -- on the
+    left-side corners (LF/LR) the R channel is the inboard edge, while on
+    the right-side corners (RF/RR) the L channel is the inboard edge."""
+    if tread == "M":
+        return "M"
+    left_side = corner[0] == "L"  # LF/LR vs RF/RR
+    if left_side:
+        return "O" if tread == "L" else "I"
+    return "I" if tread == "L" else "O"
+
+
 @dataclass
 class TireState:
     worst_wear_remaining: float | None
@@ -71,7 +85,7 @@ class TireTracker:
             return
 
         self._current_worst = worst
-        self._worst_position = f"{worst_corner}-{worst_tread}"
+        self._worst_position = f"{worst_corner}-{_tread_side_label(worst_corner, worst_tread)}"
         if temps:
             temp = temps.get(_temp_channel(worst_corner, worst_tread))
             if temp is not None:

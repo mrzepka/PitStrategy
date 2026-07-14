@@ -27,6 +27,7 @@ const fuelMaxFinish = document.getElementById("fuel-max-finish");
 const fuelMaxRunout = document.getElementById("fuel-max-runout");
 const fuelMaxFinalWindow = document.getElementById("fuel-max-final-window");
 const fuelCap = document.getElementById("fuel-cap");
+const autoFuelBadge = document.getElementById("auto-fuel-badge");
 const fuelGaugeCol = document.getElementById("fuel-gauge-col");
 const fuelGaugeZones = document.getElementById("fuel-gauge-zones");
 const fuelGaugeMask = document.getElementById("fuel-gauge-mask");
@@ -241,6 +242,14 @@ function applySettings(settings) {
   maxFuelBox.style.display = s.show_max_fuel === false ? "none" : "";
   avgFuelBox.style.display = s.show_avg_fuel === false ? "none" : "";
   fuelGaugeCol.style.display = s.show_fuel_gauge === false ? "none" : "";
+  // Not a display preference like the other toggles here -- reflects
+  // whether the auto pit fuel *feature* is actually on (settings.js's
+  // auto_fuel_enabled checkbox), so there's nothing to show at all when
+  // it's off rather than a dim/empty placeholder. Explicit "block" (not
+  // "", unlike every other toggle here) because the CSS class itself
+  // already defaults to display:none -- "" would just clear any inline
+  // override and fall back to that same none, never actually showing it.
+  autoFuelBadge.style.display = s.auto_fuel_enabled ? "block" : "none";
   fuelTargetRow.style.display = s.show_fuel_targets === false ? "none" : "";
   tireStats.style.display = s.show_tires === false ? "none" : "";
   applyColumnVisibility(s);
