@@ -208,3 +208,27 @@ def test_stint_start_fuel_level_resets_on_reset():
 
     tracker.reset()
     assert tracker.snapshot().stint_start_fuel_level is None
+
+
+def test_lap_counter_rewinding_to_zero_is_not_treated_as_a_completed_lap():
+    # Mirrors a real session-boundary log: fuel reads 0.000L and the lap
+    # counter rewinds (e.g. 3 -> 0) as the sim resets state ahead of this
+    # tracker being told about the new session via reset(). Without a
+    # guard, this reads as "burned 24L in one lap" and wrecks both the
+    # rolling average and max_fuel_per_lap.
+    tracker = FuelTracker()
+    tracker.update(lap=0, fuel_level=28.0)
+    tracker.update(lap=1, fuel_level=26.0)  # used 2.0
+    tracker.update(lap=2, fuel_level=24.0)  # used 2.0
+    tracker.update(lap=3, fuel_level=24.0)  # holding steady before the reset tick
+    tracker.update(lap=0, fuel_level=0.0)  # session-boundary reset, not a real lap
+
+    snap = tracker.snapshot()
+    assert snap.avg_fuel_per_lap == 2.0
+    assert snap.max_fuel_per_lap == 2.0
+    assert snap.current_fuel_level == 0.0  # still reflects the live reading
+
+    # Tracking should have re-baselined at the reset tick, so the very next
+    # sample is measured from fuel_level=0.0, not from the stale 24.0.
+    tracker.update(lap=1, fuel_level=28.0)  # a genuine refuel after the reset
+    assert tracker.snapshot().stint_start_fuel_level == 28.0

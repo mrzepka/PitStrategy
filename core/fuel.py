@@ -118,6 +118,28 @@ class FuelTracker:
         if lap == self._last_lap:
             return
 
+        if lap < self._last_lap:
+            # Lap counter went backward -- not a completed lap, almost
+            # always the sim resetting state at a session boundary (e.g.
+            # a qualifying session ending and the car/telemetry rewinding
+            # before this tracker has been told about the new session via
+            # reset()). fuel_level here is frequently 0.000L, which the
+            # old code below would have read as "burned the whole tank in
+            # one lap" and folded straight into max_fuel_per_lap/the
+            # rolling average. There's nothing valid to compute across a
+            # discontinuity like this, so just re-baseline here instead,
+            # the same way the very first sample does.
+            print(
+                f"[PitStrategy] fuel: lap counter went backward ({self._last_lap}->{lap}, "
+                f"fuel_level={fuel_level:.3f}L) -- discarded as a session reset, not a "
+                f"completed lap; re-baselined instead of recording usage",
+                file=sys.stderr,
+            )
+            self._last_lap = lap
+            self._fuel_at_lap_start = fuel_level
+            self._stint_start_fuel_level = fuel_level
+            return
+
         # Lap advanced (possibly by more than 1 if a tick was missed).
         if self._fuel_at_lap_start is not None:
             delta = self._fuel_at_lap_start - fuel_level

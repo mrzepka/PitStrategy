@@ -37,7 +37,7 @@ HEIGHT = 420
 OVERLAY_WINDOW_TITLE = "PitStrategy Overlay"
 
 SETTINGS_WIDTH = 500
-SETTINGS_HEIGHT = 540
+SETTINGS_HEIGHT = 650
 SETTINGS_WINDOW_TITLE = "PitStrategy Settings"
 
 # 0 (fully invisible) - 255 (fully opaque), applied uniformly to the whole
@@ -149,6 +149,13 @@ def main(argv: list[str] | None = None) -> None:
             width=SETTINGS_WIDTH,
             height=SETTINGS_HEIGHT,
             resizable=True,
+            # Floor matches the launch size -- this window's content doesn't
+            # reflow/scale the way the overlay's does, it just runs out of
+            # room and WebView2 shows its native scrollbar, so there's no
+            # graceful way to go smaller. Better to block the drag outright
+            # than let the user land back in the state this size was
+            # increased to fix in the first place.
+            min_size=(SETTINGS_WIDTH, SETTINGS_HEIGHT),
         )
         webview.start()
     else:
