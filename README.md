@@ -96,10 +96,20 @@ see how it all looks.
   one — this makes sure it actually shows up on top of the game.
 - If iRacing or the app restarts mid-session, the overlay reconnects on its
   own — you don't need to relaunch anything.
-- **To close everything:** close the overlay window (there's no close button
-  on it since it's a bare floating panel — press **Alt+F4** while it's the
-  active window, or right-click it in the taskbar and choose Close), then
-  close the black console window too.
+
+## Closing the app
+
+Close the black console window that opened when you started the app (click
+it, then press **Alt+F4**, or click its **X**) — or click into it and press
+**Ctrl+C**. Either way, the overlay and settings windows close automatically
+with it, so that's the only window you need to close.
+
+You can also close just the overlay or the settings window on its own,
+leaving the rest of the app (and the console window) running — click that
+window and press **Alt+F4**, since it has no title bar or close button of
+its own. There's currently no button to bring a single window like that
+back without restarting the app, so only close one individually if you're
+sure you don't need it again this session.
 
 ## Reading the fuel panel
 
@@ -214,9 +224,8 @@ Borderless Windowed mode (instead of full-screen) also helps, or use a
 second monitor.
 
 **I can't find a way to close the overlay window.**
-It's a bare panel with no title bar or close button on purpose. Click on it
-once to make it the active window, then press **Alt+F4**, or right-click its
-icon in the taskbar and choose **Close**.
+It's a bare panel with no title bar or close button on purpose — see
+[Closing the app](#closing-the-app) above.
 
 ---
 
