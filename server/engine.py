@@ -66,6 +66,7 @@ class StrategyEngine:
         self._settings_lock = threading.Lock()
         self._auto_fuel_enabled = False
         self._auto_fuel_source: str | None = None
+        self._auto_fuel_buffer_laps: float = 0.0
         self._was_on_pit_road = False
         self._last_fuel_command: dict | None = None
 
@@ -101,10 +102,26 @@ class StrategyEngine:
         with self._lock:
             return self._qualifying_baseline
 
-    def set_overlay_settings(self, auto_fuel_enabled: bool, auto_fuel_source: str | None) -> None:
+    def set_overlay_settings(
+        self, auto_fuel_enabled: bool, auto_fuel_source: str | None, auto_fuel_buffer_laps: float = 0.0
+    ) -> None:
         with self._settings_lock:
+            changed = (
+                auto_fuel_enabled != self._auto_fuel_enabled
+                or auto_fuel_source != self._auto_fuel_source
+                or auto_fuel_buffer_laps != self._auto_fuel_buffer_laps
+            )
             self._auto_fuel_enabled = auto_fuel_enabled
             self._auto_fuel_source = auto_fuel_source
+            self._auto_fuel_buffer_laps = auto_fuel_buffer_laps
+        if changed:
+            # Otherwise the overlay's bottom status line keeps showing the
+            # last *actual* auto-fuel send (see _last_fuel_command below)
+            # even after the feature's been turned off or switched to a
+            # different calculation -- making a change that already took
+            # effect look like it didn't.
+            with self._lock:
+                self._last_fuel_command = None
 
     def _run(self) -> None:
         while not self._stop_event.is_set():
@@ -232,6 +249,7 @@ class StrategyEngine:
         with self._settings_lock:
             auto_fuel_enabled = self._auto_fuel_enabled
             auto_fuel_source = self._auto_fuel_source
+            auto_fuel_buffer_laps = self._auto_fuel_buffer_laps
         if entered_pit_road:
             # Logged unconditionally -- pit-road entry itself is detected
             # regardless of whether the auto-fuel feature is turned on, so
@@ -303,6 +321,20 @@ class StrategyEngine:
             if state.session_time_remain is not None and leader_pace_state.avg_lap_time_s
             else None
         )
+        if laps_remaining_leader_pace is not None and state.laps_remain is not None:
+            # A lap-limited race (or a time-certain one where the lap cap
+            # happens to be the tighter constraint) ends before the clock
+            # would otherwise suggest -- session_time_remain alone doesn't
+            # know that, so a pure time/pace division overshoots. Clamp down
+            # to SessionLapsRemainEx rather than replacing this estimate
+            # outright, since leader-pace is still the better number for a
+            # genuinely time-certain finish (the checkered flag falls on the
+            # leader's lap, not a time/pace division). Safe even against
+            # SessionLapsRemainEx's unverified "unlimited" sentinel (see
+            # CODE_REVIEW.md) since that sentinel is documented as a large
+            # placeholder -- min() only ever picks it when it's smaller than
+            # the time-based estimate, i.e. never in practice.
+            laps_remaining_leader_pace = min(laps_remaining_leader_pace, state.laps_remain)
         fuel_needed_to_finish_leader_pace = (
             laps_remaining_leader_pace * fuel_state.avg_fuel_per_lap
             if laps_remaining_leader_pace is not None and fuel_state.avg_fuel_per_lap
@@ -332,27 +364,37 @@ class StrategyEngine:
                 # rate, not a full tank -- mirrors the "Finish" column's own
                 # math (current fuel vs. laps-remaining-at-leader-pace * rate),
                 # just solved for "how much more to add" instead of "what's
-                # the margin." Clamped so this never asks for more than the
-                # tank can physically hold.
-                fuel_needed = laps_remaining_leader_pace * rate
+                # the margin." auto_fuel_buffer_laps pads laps_remaining
+                # before that (rather than padding the liters total
+                # directly), so the margin it buys stays in lap units and
+                # scales with whichever rate is currently selected. Clamped
+                # so this never asks for more than the tank can physically
+                # hold.
+                fuel_needed = (laps_remaining_leader_pace + auto_fuel_buffer_laps) * rate
                 amount = fuel_needed - fuel_state.current_fuel_level
                 amount = max(0.0, min(amount, fuel_state.tank_capacity - fuel_state.current_fuel_level))
                 if amount <= 0.05:
                     print(
                         f"[PitStrategy] auto pit fuel: skipped -- already enough fuel to finish at "
-                        f"source={auto_fuel_source!r} rate={rate:.3f} L/lap (needed={fuel_needed:.2f}L, "
-                        f"current={fuel_state.current_fuel_level:.2f}L)",
+                        f"source={auto_fuel_source!r} rate={rate:.3f} L/lap buffer={auto_fuel_buffer_laps:+.1f} "
+                        f"laps (needed={fuel_needed:.2f}L, current={fuel_state.current_fuel_level:.2f}L)",
                         file=sys.stderr,
                     )
                 else:
                     sent = self._source.send_pit_fuel(amount)
                     print(
                         f"[PitStrategy] auto pit fuel: requested {amount:.1f}L to finish at "
-                        f"source={auto_fuel_source!r} rate={rate:.3f} L/lap (sent={sent})",
+                        f"source={auto_fuel_source!r} rate={rate:.3f} L/lap buffer={auto_fuel_buffer_laps:+.1f} "
+                        f"laps (sent={sent})",
                         file=sys.stderr,
                     )
                     with self._lock:
-                        self._last_fuel_command = {"amount_l": amount, "source": auto_fuel_source, "sent": sent}
+                        self._last_fuel_command = {
+                            "amount_l": amount,
+                            "source": auto_fuel_source,
+                            "buffer_laps": auto_fuel_buffer_laps,
+                            "sent": sent,
+                        }
 
         with self._lock:
             self._latest = {

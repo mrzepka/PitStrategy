@@ -28,6 +28,16 @@
 # easier to diagnose with visible output than silently failing behind a
 # windowed app. Switch to console=False once it's stable enough that this
 # stops being useful.
+#
+# Also builds PitStrategy-Demo.exe alongside it, from the separate
+# run_demo_launcher.py entry point -- a one-click way for someone to try the
+# app with synthetic data, no terminal/flags needed (equivalent to running
+# `PitStrategy.exe --demo` by hand). Its own Analysis only needs stdlib
+# (subprocess/ctypes) since it just spawns the real exe as a child process
+# rather than importing run.py -- pulling run.py in directly here would
+# re-collect the entire webview/uvicorn/pyirsdk dependency tree a second
+# time into this COLLECT, roughly doubling the shipped folder's size for a
+# feature that's just "start the other exe with one extra flag."
 
 from PyInstaller.utils.hooks import collect_all
 
@@ -74,11 +84,48 @@ exe = EXE(
     disable_windowed_traceback=False,
     argv_emulation=False,
 )
+demo_a = Analysis(
+    ["run_demo_launcher.py"],
+    pathex=[],
+    binaries=[],
+    datas=[],
+    hiddenimports=[],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+    noarchive=False,
+)
+demo_pyz = PYZ(demo_a.pure)
+
+demo_exe = EXE(
+    demo_pyz,
+    demo_a.scripts,
+    [],
+    exclude_binaries=True,
+    name="PitStrategy-Demo",
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=False,
+    # windowed (no console) -- it does nothing but spawn PitStrategy.exe
+    # --demo (in its own new console, see run_demo_launcher.py) and exit, so
+    # there's nothing worth showing a console for; console=True here would
+    # just flash an empty window for a moment.
+    console=False,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+)
+
 coll = COLLECT(
     exe,
     a.binaries,
     a.zipfiles,
     a.datas,
+    demo_exe,
+    demo_a.binaries,
+    demo_a.zipfiles,
+    demo_a.datas,
     strip=False,
     upx=False,
     name="PitStrategy",

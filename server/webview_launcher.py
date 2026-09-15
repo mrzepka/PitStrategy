@@ -148,14 +148,19 @@ def main(argv: list[str] | None = None) -> None:
             url,
             width=SETTINGS_WIDTH,
             height=SETTINGS_HEIGHT,
-            resizable=True,
-            # Floor matches the launch size -- this window's content doesn't
-            # reflow/scale the way the overlay's does, it just runs out of
-            # room and WebView2 shows its native scrollbar, so there's no
-            # graceful way to go smaller. Better to block the drag outright
-            # than let the user land back in the state this size was
-            # increased to fix in the first place.
-            min_size=(SETTINGS_WIDTH, SETTINGS_HEIGHT),
+            # Not resizable at all, rather than resizable with a min_size
+            # floor -- that floor did stop the window's own frame from
+            # ending up too small (confirmed via GetWindowRect), but a
+            # live mouse-drag still fires a rapid stream of intermediate
+            # resize events that can leave WebView2's internal layout out
+            # of sync with the corrected frame size, showing a scrollbar
+            # even once the drag settles back at the floor. This content
+            # doesn't reflow/scale the way the overlay's does (fixed
+            # 480px-wide, non-responsive grid) so there's nothing gained
+            # by allowing resize in the first place -- removing the
+            # ability to drag at all sidesteps the whole class of bug
+            # instead of chasing the exact WebView2 timing quirk.
+            resizable=False,
         )
         webview.start()
     else:

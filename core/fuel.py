@@ -41,6 +41,22 @@ class FuelTracker:
         # detected) and held fixed for the rest of that stint -- not
         # recomputed lap to lap the way current_fuel_level is.
         self._stint_start_fuel_level: float | None = None
+        # Set whenever the lap/fuel baseline was just (re)established --
+        # this constructor's own initial state, an explicit reset() mid-
+        # session, or a backward lap-counter jump -- rather than a genuine
+        # lap boundary. The very next lap-advanced transition may only span
+        # part of a lap in that case, so its computed usage gets discarded
+        # instead of corrupting the rolling average. Confirmed live from
+        # two different real triggers: a session-transition reset() mid-lap
+        # produced a 0.258 L/lap first reading against a real ~2.08 L/lap
+        # pace; separately, driving out a few feet and using iRacing's
+        # "reset car" (which does NOT go through reset() at all -- same
+        # session, no session-type change -- so it's this tracker's very
+        # first-ever sample instead) produced the same kind of distortion.
+        # Applies uniformly to every "no prior lap" case for that reason --
+        # there's no scenario where the first sample can be trusted to
+        # align with a true lap boundary.
+        self._skip_next_usage_sample = False
 
         # Manual fuel-limit override, e.g. a league rule capping usable fuel
         # below the car's physical tank. Guarded by its own lock since,
@@ -98,6 +114,7 @@ class FuelTracker:
         self._fuel_at_lap_start = None
         self._max_fuel_per_lap = None
         self._stint_start_fuel_level = None
+        self._skip_next_usage_sample = False
 
     def update(self, lap: int, fuel_level: float) -> None:
         self._current_fuel = fuel_level
@@ -106,11 +123,13 @@ class FuelTracker:
             self._last_lap = lap
             self._fuel_at_lap_start = fuel_level
             self._stint_start_fuel_level = fuel_level
+            self._skip_next_usage_sample = True
             print(
                 f"[PitStrategy] fuel: tracking (re)started at lap={lap} "
                 f"fuel_level={fuel_level:.3f}L -- if this lap wasn't actually just starting "
-                f"(e.g. mid-lap, or an out-lap that doesn't increment `lap`), the very next "
-                f"sample's usage will be inflated by whatever was burned before this point",
+                f"(e.g. mid-lap, or an out-lap that doesn't increment `lap`), the next lap's "
+                f"usage would be thrown off by whatever was burned before this point, so that "
+                f"one sample will be discarded rather than fed into the rolling average",
                 file=sys.stderr,
             )
             return
@@ -138,6 +157,7 @@ class FuelTracker:
             self._last_lap = lap
             self._fuel_at_lap_start = fuel_level
             self._stint_start_fuel_level = fuel_level
+            self._skip_next_usage_sample = True
             return
 
         # Lap advanced (possibly by more than 1 if a tick was missed).
@@ -145,7 +165,16 @@ class FuelTracker:
             delta = self._fuel_at_lap_start - fuel_level
             laps_advanced = max(lap - self._last_lap, 1)
             per_lap = delta / laps_advanced
-            if delta > 0:
+            if delta > 0 and self._skip_next_usage_sample:
+                print(
+                    f"[PitStrategy] fuel: lap {self._last_lap}->{lap} "
+                    f"usage={per_lap:.3f} L/lap (fuel {self._fuel_at_lap_start:.3f}L -> "
+                    f"{fuel_level:.3f}L over {laps_advanced} lap(s)) -- discarded: first "
+                    f"sample since a (re)start/reset, likely doesn't span a full lap",
+                    file=sys.stderr,
+                )
+                self._skip_next_usage_sample = False
+            elif delta > 0:
                 # Only trust usage that actually decreased fuel (a refuel
                 # mid-lap would otherwise show as negative/zero usage and
                 # drag the average down).
@@ -164,7 +193,12 @@ class FuelTracker:
                 # new stint is starting. `fuel_level` here is what's in the
                 # tank as this new stint begins -- snapshot it and hold it
                 # fixed until the *next* refuel, rather than letting it
-                # shrink lap to lap the way current_fuel_level does.
+                # shrink lap to lap the way current_fuel_level does. This is
+                # a genuine lap-boundary crossing (just with a stop in
+                # between), so any pending skip from an earlier restart is
+                # moot -- clear it, or the lap after next would get wrongly
+                # discarded too.
+                self._skip_next_usage_sample = False
                 print(
                     f"[PitStrategy] fuel: lap {self._last_lap}->{lap} "
                     f"fuel {self._fuel_at_lap_start:.3f}L -> {fuel_level:.3f}L "

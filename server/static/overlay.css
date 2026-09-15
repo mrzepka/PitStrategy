@@ -17,21 +17,24 @@ html, body {
   margin: 0;
   padding: 0;
   background: transparent;
+  /* #hud is scaled visually via transform (see its transform-origin
+     comment below), which doesn't shrink the box space it reserves in
+     the page's own layout -- overlay.js's fitWindowToContent() keeps
+     body's width/height synced to the scaled visual size to avoid that
+     mismatch, but overflow:hidden is a hard backstop against ever
+     showing a scrollbar on a window that's always meant to exactly fit
+     its own content. */
+  overflow: hidden;
 }
 
 body {
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   color: var(--text-primary);
-  /* Widened from 340px -> 380px -> 420px as the Now/Stint/Finish columns
-     were added, then to 460px so those same columns could grow from 34px
-     to 46px each to fit larger, easier-to-read figures. Narrowed back to
-     420px after the pit-window list column was removed and its "run out"
-     figures were folded into a 5th per-row column here instead, then to
-     400px once run-out was trimmed from a 3-lap to a 2-lap projection.
-     (Briefly went to 412px for a 3-decimal-precision Finish column, e.g.
-     "-38.931" -- reverted back to 400px along with Finish's 2-decimal
-     precision, e.g. "-38.93".) */
-  width: 400px;
+  /* No fixed width here (was a hardcoded 400px, widened/narrowed by hand
+     as columns changed over time) -- overlay.js's fitWindowToContent()
+     now sets this directly from #hud's actual scaled size on every
+     render, so it always matches regardless of zoom level or content
+     changes instead of needing to be kept in sync by hand. */
 }
 
 #hud {
@@ -45,6 +48,17 @@ body {
   border-radius: 0;
   padding: 10px 12px;
   position: relative; /* anchors #resize-grip */
+  /* Without an explicit width, a block-level div defaults to filling its
+     parent (body) instead of sizing to its own content. That's fine while
+     body has a fixed width, but overlay.js's fitWindowToContent() now
+     syncs body's box to #hud's *scaled* size every render -- if #hud also
+     filled body, that would feed back into #hud's own offsetWidth
+     (measured pre-transform, as the "natural" size to scale from) on the
+     very next call, permanently shrinking it every time zoom goes below
+     100% with no way back. max-content keeps #hud sized to what its
+     content actually needs, independent of whatever body's box currently
+     is. */
+  width: max-content;
   /* Scaling (overlay.js's applyScale(), from dragging #resize-grip) grows
      from the top-left corner -- matches server/webview_launcher.py's
      _Api.resize() -> Window.resize()'s default FixPoint.NORTH|WEST, so the

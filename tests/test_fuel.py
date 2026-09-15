@@ -55,13 +55,13 @@ def test_tank_capacity_is_only_set_when_positive():
 def test_max_fuel_per_lap_survives_leaving_the_rolling_window():
     tracker = FuelTracker(history_len=2)
     tracker.update(lap=0, fuel_level=60.0)
-    tracker.update(lap=1, fuel_level=55.0)  # used 5 -- the session peak
-    tracker.update(lap=2, fuel_level=52.5)  # used 2.5
-    tracker.update(lap=3, fuel_level=50.0)  # used 2.5
-    tracker.update(lap=4, fuel_level=47.5)  # used 2.5 -- lap 1's 5.0 has aged out of the rolling window
+    tracker.update(lap=1, fuel_level=58.0)  # used 2 -- discarded, first sample since start
+    tracker.update(lap=2, fuel_level=53.0)  # used 5 -- the session peak
+    tracker.update(lap=3, fuel_level=50.5)  # used 2.5
+    tracker.update(lap=4, fuel_level=48.0)  # used 2.5 -- lap 2's 5.0 has aged out of the rolling window
 
     snap = tracker.snapshot()
-    assert snap.avg_fuel_per_lap == 2.5  # rolling average no longer sees the lap-1 spike
+    assert snap.avg_fuel_per_lap == 2.5  # rolling average no longer sees the lap-2 spike
     assert snap.max_fuel_per_lap == 5.0  # but the session max still remembers it
 
 
@@ -79,7 +79,8 @@ def test_max_fuel_per_lap_ignores_refuel_outliers():
 def test_reset_clears_max_fuel_per_lap():
     tracker = FuelTracker()
     tracker.update(lap=0, fuel_level=60.0)
-    tracker.update(lap=1, fuel_level=55.0)
+    tracker.update(lap=1, fuel_level=55.0)  # discarded, first sample since start
+    tracker.update(lap=2, fuel_level=50.0)  # used 5
     assert tracker.snapshot().max_fuel_per_lap == 5.0
     tracker.reset()
     assert tracker.snapshot().max_fuel_per_lap is None
@@ -136,10 +137,13 @@ def test_last_lap_fuel_per_lap_is_the_most_recent_sample_not_the_average():
     assert tracker.snapshot().last_lap_fuel_per_lap is None  # no laps completed yet
 
     tracker.update(lap=0, fuel_level=60.0)
-    tracker.update(lap=1, fuel_level=57.5)  # used 2.5
+    tracker.update(lap=1, fuel_level=57.5)  # discarded, first sample since start
+    assert tracker.snapshot().last_lap_fuel_per_lap is None
+
+    tracker.update(lap=2, fuel_level=55.0)  # used 2.5
     assert tracker.snapshot().last_lap_fuel_per_lap == 2.5
 
-    tracker.update(lap=2, fuel_level=54.0)  # used 3.5 -- a heavier lap
+    tracker.update(lap=3, fuel_level=51.5)  # used 3.5 -- a heavier lap
     snap = tracker.snapshot()
     assert snap.last_lap_fuel_per_lap == 3.5
     assert snap.avg_fuel_per_lap == 3.0  # (2.5 + 3.5) / 2 -- the two differ as expected
@@ -148,8 +152,9 @@ def test_last_lap_fuel_per_lap_is_the_most_recent_sample_not_the_average():
 def test_last_lap_fuel_per_lap_ignores_refuel_outlier():
     tracker = FuelTracker()
     tracker.update(lap=0, fuel_level=60.0)
-    tracker.update(lap=1, fuel_level=57.5)  # used 2.5
-    tracker.update(lap=2, fuel_level=65.0)  # refueled -- discarded, not recorded as "last lap"
+    tracker.update(lap=1, fuel_level=57.5)  # discarded, first sample since start
+    tracker.update(lap=2, fuel_level=55.0)  # used 2.5
+    tracker.update(lap=3, fuel_level=65.0)  # refueled -- discarded, not recorded as "last lap"
     assert tracker.snapshot().last_lap_fuel_per_lap == 2.5
 
 
@@ -232,3 +237,48 @@ def test_lap_counter_rewinding_to_zero_is_not_treated_as_a_completed_lap():
     # sample is measured from fuel_level=0.0, not from the stale 24.0.
     tracker.update(lap=1, fuel_level=28.0)  # a genuine refuel after the reset
     assert tracker.snapshot().stint_start_fuel_level == 28.0
+
+
+def test_reset_mid_lap_discards_the_first_post_reset_sample():
+    # Mirrors a real log: reset() fires (e.g. a session transition) while
+    # the car is already partway through lap 0, so the captured baseline
+    # doesn't correspond to the true start of that lap. The next
+    # lap-advanced transition only spans the remainder of the lap and reads
+    # far lower than the real per-lap rate (0.258 L/lap against a real
+    # ~2.08 L/lap pace) -- that sample should be discarded, not folded into
+    # the rolling average, while later (genuinely full) laps are unaffected.
+    tracker = FuelTracker()
+    tracker.update(lap=0, fuel_level=60.0)
+    tracker.update(lap=1, fuel_level=57.5)  # used 2.5 -- a normal stint, pre-reset
+    tracker.reset()
+
+    tracker.update(lap=0, fuel_level=17.0)  # reset fires mid-lap-0
+    tracker.update(lap=1, fuel_level=16.742)  # only a partial lap's worth (0.258) -- must be discarded
+    snap = tracker.snapshot()
+    assert snap.samples == 0
+    assert snap.avg_fuel_per_lap is None
+    assert snap.max_fuel_per_lap is None
+
+    tracker.update(lap=2, fuel_level=14.621)  # a genuine full lap now (2.121) -- must be accepted
+    snap = tracker.snapshot()
+    assert snap.samples == 1
+    assert snap.avg_fuel_per_lap == 16.742 - 14.621
+
+
+def test_fresh_tracker_first_sample_is_also_discarded():
+    # Mirrors a second real report, distinct from the reset() case above:
+    # driving out a few feet and using iRacing's "reset car" -- which does
+    # NOT go through reset() at all (same session, no session-type change)
+    # -- so the distorted baseline lands on this tracker's very first-ever
+    # sample instead. There's no way to tell "genuinely fresh start" apart
+    # from "fresh start that already missed part of a lap" from the data
+    # alone, so the first sample is never trusted, constructor or not.
+    tracker = FuelTracker()
+    tracker.update(lap=0, fuel_level=60.0)
+    tracker.update(lap=1, fuel_level=55.0)  # used 5 -- discarded, not trusted
+    assert tracker.snapshot().samples == 0
+    assert tracker.snapshot().avg_fuel_per_lap is None
+
+    tracker.update(lap=2, fuel_level=52.5)  # used 2.5 -- a genuine full lap, accepted normally
+    assert tracker.snapshot().samples == 1
+    assert tracker.snapshot().avg_fuel_per_lap == 2.5

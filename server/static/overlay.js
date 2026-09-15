@@ -104,6 +104,17 @@ function fitWindowToContent() {
     const contentWidth = Math.round(hud.offsetWidth * currentScale);
     const contentHeight = Math.round(hud.offsetHeight * currentScale);
 
+    // #hud's transform scales it visually without shrinking the box space
+    // it reserves in body's layout, so at any zoom below 100% body would
+    // otherwise still reserve the pre-scale (larger) size -- leaving
+    // whitespace beyond the visibly-smaller HUD and, since the window
+    // itself gets resized down to match the *visual* size below, a
+    // scrollbar once the window becomes smaller than that reserved
+    // layout size. Keeping body's own box in sync with the same scaled
+    // numbers used to resize the window closes that gap.
+    document.body.style.width = `${contentWidth}px`;
+    document.body.style.height = `${contentHeight}px`;
+
     if (window.pywebview && window.pywebview.api && window.pywebview.api.resize) {
       const key = `pywebview:${contentWidth}x${contentHeight}`;
       if (key === lastFittedSize) return;
@@ -579,8 +590,9 @@ function render(data) {
   relativePanel.style.display = showRelative ? "" : "none";
 
   const fuelCommand = data.last_fuel_command;
+  const bufferSuffix = fuelCommand && fuelCommand.buffer_laps ? `, ${fuelCommand.buffer_laps > 0 ? "+" : ""}${fuelCommand.buffer_laps.toFixed(1)} lap buffer` : "";
   fuelCommandLine.textContent = fuelCommand
-    ? `Pit fuel: ${toDisplayVolume(fuelCommand.amount_l).toFixed(1)}${volumeSuffix(false)} (${AUTO_FUEL_SOURCE_LABELS[fuelCommand.source] || fuelCommand.source}) ${fuelCommand.sent ? "sent" : "FAILED"}`
+    ? `Pit fuel: ${toDisplayVolume(fuelCommand.amount_l).toFixed(1)}${volumeSuffix(false)} (${AUTO_FUEL_SOURCE_LABELS[fuelCommand.source] || fuelCommand.source}${bufferSuffix}) ${fuelCommand.sent ? "sent" : "FAILED"}`
     : "";
 
   fitWindowToContent();

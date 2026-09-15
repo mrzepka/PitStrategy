@@ -42,7 +42,11 @@
         Use
         <select id="auto_fuel_source"></select>
       </label>
-      <p class="hint">Requests enough fuel to finish the race at the selected rate the moment you enter pit road. Only rows checked on above are selectable. You still need to drive into your pit stall for it to take effect.</p>
+      <label class="zoom-label">
+        Buffer
+        <input type="number" id="auto_fuel_buffer_laps" step="0.1" min="-5" max="20" /> laps
+      </label>
+      <p class="hint">Requests enough fuel to finish the race at the selected rate the moment you enter pit road. Only rows checked on above are selectable. You still need to drive into your pit stall for it to take effect. Buffer adds (or, if negative, subtracts) that many laps' worth of fuel on top of the exact amount needed to finish, in 0.1-lap steps.</p>
     </section>
   </div>
 

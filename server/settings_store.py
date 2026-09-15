@@ -46,10 +46,20 @@ class OverlaySettings(BaseModel):
     # not just a display feature, so it shouldn't ever fire without the
     # user explicitly opting in. auto_fuel_source is only ever set by
     # settings.js to one of the four rows currently checked *on* in the
-    # "Fuel calculations (rows)" section above; None means no source has
-    # been picked yet (or its row got unchecked and the pick was cleared).
+    # "Fuel calculations (rows)" section above; settings.js defaults it to
+    # the first checked row itself (rather than leaving it None) whenever
+    # nothing valid is currently selected, and forces auto_fuel_enabled
+    # back off if every row gets unchecked, so None here should only ever
+    # be transient mid-request, never a steady state with auto_fuel_enabled
+    # still True.
     auto_fuel_enabled: bool = False
     auto_fuel_source: Literal["last_lap", "max_fuel", "avg_fuel", "quali_fuel"] | None = None
+    # Extra laps' worth of fuel (at auto_fuel_source's rate) requested on top
+    # of the exact amount needed to finish -- a safety margin against the
+    # rate estimate coming in a little light. Adjustable in 0.1-lap steps
+    # (settings.js's step="0.1" number input) either direction; negative
+    # deliberately requests less than the exact finish amount.
+    auto_fuel_buffer_laps: float = Field(default=0.0, ge=-5.0, le=20.0)
     # Display-only -- every value stays in liters everywhere else (fuel.py's
     # tracking math, the SDK pit-fuel request, the websocket payload).
     # overlay.js converts liters -> US gallons at render time when this is
